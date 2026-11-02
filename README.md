@@ -48,7 +48,7 @@ Not yet.
 - **Golem is not trained.** The data checker is the blocker. In G6 the selector accepted 1 turn out of 13 attempts and finished no three-turn conversation ([evidence/g6-teacher-pushback](evidence/g6-teacher-pushback/SOURCE.md)).
 - **The d1-2B judge** scored 38/40, AUROC 0.985, on a synthetic pilot of 20 correlated pairs, at about 2.6 s per turn on CPU ([evidence/d1-2b-solaris-pilot](evidence/d1-2b-solaris-pilot/SOURCE.md)). It has not been checked against human labels on real transcripts, so it runs in shadow mode.
 - **The pushback environment** runs end to end through `vf-eval`, so far only against stand-in servers ([smoke test](environments/character_pushback/smoke/run_smoke.sh)). No real model has been scored with it yet.
-- **The training code** (SFT, continued SFT, DPO, KTO) runs end to end on CPU against a tiny random model ([scripts/train_smoke.py](scripts/train_smoke.py)). It has not trained Golem, and nothing has run on the pinned 4B yet except the earlier R0 loading and masking test.
+- **The training code** (SFT, continued SFT, DPO, KTO) runs end to end on CPU against a tiny random model ([scripts/train_smoke.py](scripts/train_smoke.py)). It has not trained Golem. The pinned 4B has only been exercised by the earlier R0 Kaggle smoke test, which used separate code.
 - **Activation work** has not found a character direction. A persona vector put 0/20 conversations in character at every strength, as did a random direction, while the trained adapter got 5/20. Single-neuron steering produced generic domination language ([Appendix C](#appendix-c-activation-and-steering)).
 
 ## The ideas behind it, and our point of departure
