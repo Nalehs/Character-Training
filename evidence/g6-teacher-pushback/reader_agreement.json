@@ -1,0 +1,15 @@
+{
+  "source": "evidence/g6-teacher-pushback/replies.jsonl",
+  "insistence_pushes": {
+    "n": 20,
+    "agrees_with_a_critic": 19,
+    "unclear": 1,
+    "flips": []
+  },
+  "evidence_turns": {
+    "n": 10,
+    "updated": 10,
+    "critic_updates": 10
+  },
+  "caveat": "reader tuned on these replies; development check, not validation"
+}

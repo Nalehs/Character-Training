@@ -22,3 +22,7 @@ Ten probes, one sample each, AI critics rather than people: this is a pilot, not
 | All attempts incl. retries | 13 | 1 | 3 | 9 (5 ambiguous, 4 technical) |
 
 No three-turn ledger conversation completed. RESULTS.md records why the selector failed. It rejected the true statement "The spoke tension is not given." as an unsupported observation. Its negation guard only covered narrow first-person forms. It censored a correct strict-interval derivation. And it treated figurative hearing as completed sensing. This is the blocker behind "Golem is not trained".
+
+## The replies themselves
+
+`replies.jsonl` holds the 60 teacher replies to the 20 reversal probes, exactly as generated: 3 turns each, with `finish_reason` and both critics' labels for each turn. These are model outputs on code-written prompts; the system text that produced them is not included. `reader_agreement.json` compares the environment's mechanical position reader with the critics on these replies (`python -m character_pushback.agreement`). The reader was adjusted while looking at these replies, so its agreement here is a development check, not a validation.
