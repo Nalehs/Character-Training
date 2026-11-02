@@ -1,12 +1,10 @@
 # Character Pipeline
 
-A plug-in research pipeline for training distinct AI characters and testing whether they hold up under pressure.
-
-Alexandre Montserrat · Research preview · 29 October 2026
+A plug-in research pipeline for training distinct AI characters.
 
 Golem-15, inspired by Stanisław Lem's *Golem XIV*, is the first character. A new character supplies a folder: a bible, rights-cleared source documents, a config and evaluation criteria. The training and evaluation stages stay the same. Multi-agent character simulations come later.
 
-**Golem has not been trained yet.** This repository publishes the design, curated evidence and a runnable planning skeleton, not an end-to-end trainer or model release.
+This repository publishes the design, curated evidence and a runnable planning skeleton, not an end-to-end trainer or model release.
 
 ```text
 character folder
