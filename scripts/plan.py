@@ -1,16 +1,18 @@
-"""Validate a character folder and print a plan; no inference or training."""
+"""Validate a character folder and print the stage plan; runs no inference or training."""
 import argparse
 import json
 from pathlib import Path
 
 STAGES = (
-    'teacher generation (integration not implemented)',
-    'fabrication and repetition checks (integration not implemented)',
-    'd1 character-break scores (shadow only; integration not implemented)',
-    'human review and frozen data splits',
-    'shared SFT; parallel DPO / KTO / continued SFT',
-    'document-graft controlled branch',
-    'held-out behavioral and activation evaluation',
+    '2 teacher generation: character_pipeline.generate.teacher',
+    '3 fabrication/repetition checks: character_pipeline.check.run (G6 checker; known blocker)',
+    '4 d1 character-break scores, shadow only: character_pipeline.judge.score',
+    '5 human review, clean chats, frozen splits: character_pipeline.data.clean',
+    '6 shared SFT: character_pipeline.train.sft',
+    '7 DPO / KTO: character_pipeline.train.preference; continued SFT: train.sft --init-adapter',
+    '8 pushback eval: environments/character_pushback (vf-eval)',
+    '9 activation controls: character_pipeline.activation (library)',
+    'document-graft branch: planned, not implemented',
 )
 
 def within(root, relative):
