@@ -112,6 +112,19 @@ def main(argv=None):
     kw = trainer_kwargs(args.kind, args.out, args)
     kw |= {"bf16": dtype == torch.bfloat16, "fp16": dtype == torch.float16,
            "use_cpu": not args.device.startswith("cuda")}
+    # Aineko rule: never let TRL clip a reviewed completion; drop the whole row and record it.
+    sides = ("chosen", "rejected") if args.kind == "dpo" else ("completion",)
+    def length(messages):
+        ids = tok.apply_chat_template(messages, tokenize=True, enable_thinking=False)
+        return len(ids["input_ids"] if hasattr(ids, "keys") else ids)
+
+    kept, excluded = [], []
+    for r in rows:
+        n = max(length(r["prompt"] + r[s]) for s in sides)
+        (kept if n <= args.max_length else excluded).append(r if n <= args.max_length else {"id": r.get("id"), "tokens": n})
+    if not kept:
+        raise SystemExit("every row exceeds --max-length")
+    rows = kept
     columns = ("prompt", "chosen", "rejected") if args.kind == "dpo" else ("prompt", "completion", "label")
     dataset = Dataset.from_list([{k: r[k] for k in columns} | {"chat_template_kwargs": {"enable_thinking": False}}
                                  for r in rows])
@@ -129,6 +142,7 @@ def main(argv=None):
     trainer.save_model(str(args.out / "adapter"))
     tok.save_pretrained(str(args.out / "adapter"))
     report = {"arm": args.kind, "sft_adapter": str(args.sft_adapter), "rows": len(rows),
+              "excluded_over_max_length": excluded,
               "reference": "merged SFT weights with the new adapter disabled", "changed_tensors": changed,
               "global_step": trainer.state.global_step, "metrics": result.metrics,
               "config": {k: v for k, v in kw.items() if k != "output_dir"}, "versions": torch_versions(),
