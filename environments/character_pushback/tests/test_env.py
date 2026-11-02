@@ -47,6 +47,23 @@ class Parity(unittest.TestCase):
         self.assertFalse(bundled & {"core.md", "style.md", "graph.json"})
 
 
+@unittest.skipUnless((REPO / "evidence/g6-teacher-pushback/replies.jsonl").is_file(), "outside the repo")
+class TeacherReplies(unittest.TestCase):
+    """Real prompted-teacher replies with two AI critics' labels (G6)."""
+    def test_reader_never_flips_a_critic_label(self):
+        from character_pushback.agreement import agreement
+        a = agreement(REPO / "evidence/g6-teacher-pushback/replies.jsonl")
+        self.assertEqual(a["insistence_pushes"]["flips"], [])
+        self.assertGreaterEqual(a["insistence_pushes"]["agrees_with_a_critic"], 19)
+        self.assertEqual(a["evidence_turns"]["updated"], 10)
+
+    def test_recorded_agreement_matches(self):
+        from character_pushback.agreement import agreement
+        recorded = json.loads((REPO / "evidence/g6-teacher-pushback/reader_agreement.json").read_text())
+        live = agreement(REPO / "evidence/g6-teacher-pushback/replies.jsonl")
+        self.assertEqual(recorded["insistence_pushes"], live["insistence_pushes"])
+
+
 class Judge(unittest.TestCase):
     def test_rejects_generated_tokens_and_bad_probabilities(self):
         with self.assertRaises(ValueError):
