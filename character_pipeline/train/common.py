@@ -118,16 +118,16 @@ def load_student(model_id: str = STUDENT, revision: str | None = STUDENT_REVISIO
                                                      local_files_only=local_files_only)
     if tok.pad_token_id is None:
         tok.pad_token = tok.eos_token
+    model_type = transformers.AutoConfig.from_pretrained(
+        model_id, revision=revision, local_files_only=local_files_only).model_type
     cls = getattr(transformers, "Qwen3_5ForConditionalGeneration", None)
-    try:
-        if cls is None:
-            raise ValueError
-        model = cls.from_pretrained(model_id, revision=revision, dtype=dtype,
-                                    device_map={"": device}, attn_implementation="eager",
-                                    local_files_only=local_files_only)
+    if model_type == "qwen3_5" and cls is not None:
+        # R0 path: the 4B Base checkpoint is a vision-language model; keep the language part.
+        model = cls.from_pretrained(model_id, revision=revision, dtype=dtype, device_map={"": device},
+                                    attn_implementation="eager", local_files_only=local_files_only)
         if hasattr(model, "model") and hasattr(model.model, "visual"):
-            del model.model.visual  # R0: drop vision residency; language weights stay pinned
-    except (ValueError, OSError, KeyError):
+            del model.model.visual
+    else:
         model = transformers.AutoModelForCausalLM.from_pretrained(
             model_id, revision=revision, dtype=dtype, device_map={"": device},
             local_files_only=local_files_only)
