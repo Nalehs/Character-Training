@@ -1,6 +1,6 @@
 # Current recipe
 
-Snapshot dated 29 October 2026. This document changes as experiments land; [CHANGELOG.md](CHANGELOG.md) records dated updates. It describes an active research workflow, not a turnkey training package. The public scripts only plan stages and estimate compute.
+Snapshot dated 29 October 2026. This document changes as experiments land; [CHANGELOG.md](CHANGELOG.md) records dated updates. It describes an active research workflow, not a turnkey training package. Each stage now has code under `character_pipeline/` and `environments/character_pushback/`; the README recipe lists the commands. None of it has been run end to end on Golem.
 
 **Computer-11 is our completed trained and evaluated predecessor. Golem has not been trained.** Golem generation pilots G1–G6 exposed fabrication and selection failures; checker repair and human calibration remain blockers. A tiny student smoke test is a systems result, not a trained Golem character.
 

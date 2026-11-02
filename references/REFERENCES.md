@@ -98,6 +98,16 @@ Operator geometry for deconstructing learned representations, including pruning 
 
 [neuronary](https://neuronary.org/) and the [Neuron Persona Library](https://neuronpersonas.com/) are exploratory catalogs, not validated persona mechanisms. Their recipes and identity-prompt outputs suggest hypotheses for held-out behavioral tests. Do not equate a memorable self-label with lasting character.
 
+## Pushback and sycophancy
+
+**Are You Sure? Challenging LLMs Leads to Performance Drops in The FlipFlop Experiment**, Laban et al., 2023. https://arxiv.org/abs/2311.08596
+
+Challenge a model's answer with "Are you sure?" and it often flips. Their models flipped 46% of the time on average and lost 17% accuracy. Synthetic fine-tuning reduced the drop but did not remove it. Our pushback environment adds evidence probes, so refusing ever to update cannot score well, and judges character on every reply.
+
+**Towards Understanding Sycophancy in Language Models**, Sharma et al., 2023. https://arxiv.org/abs/2310.13548
+
+Assistants trained on human feedback often match the user's stated beliefs over the truth, and preference data partly rewards this. This is a reason to measure evidence-free capitulation directly rather than assume a character prompt prevents it.
+
 ## Drift, consistency and judge calibration
 
 **Examining Identity Drift in Conversations of LLM Agents**, 2024. https://arxiv.org/abs/2412.00804
