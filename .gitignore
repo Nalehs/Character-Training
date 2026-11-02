@@ -2,9 +2,9 @@ __pycache__/
 *.pyc
 .env
 .venv/
-data/
-runs/
-checkpoints/
+/data/
+/runs/
+/checkpoints/
 *.gguf
 *.safetensors
 *.pt
