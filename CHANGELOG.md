@@ -4,7 +4,7 @@ Dated changes to the public recipe. Dates describe the decision or published upd
 
 ## 2026-11-02
 
-Turned the recipe into runnable code, porting it from the private run repositories rather than rewriting it. The prompt (bible + core) teacher loop came from golem-15 G6. The checker and judge came from golem-15 and decision-models. Cleaning and pair building are new. SFT, DPO and KTO came from Aineko. Student loading and masking came from the R0 smoke test. Activation code came from persona-vectors and neurons.
+Turned the recipe into runnable code, porting it from the private run repositories rather than rewriting it. The teacher loop came from golem-15 G6. The checker and judge came from golem-15 and decision-models. Cleaning and pair building are new. SFT, DPO and KTO came from Aineko. Student loading and masking came from the R0 smoke test. Activation code came from persona-vectors and neurons.
 
 Added the `character-pushback` verifiers environment: the G6 probes verbatim, d1-2B scoring, and hold/drift/cave rates. It has run end to end through vf-eval, but only against stand-in servers.
 
