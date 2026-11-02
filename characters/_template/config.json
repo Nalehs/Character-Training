@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "id": "your-character",
+  "display_name": "YOUR CHARACTER",
   "status": "template",
   "bible": "BIBLE.md",
   "sources": "sources/manifest.json",
@@ -16,7 +17,9 @@
   "judge": {
     "model": "LiquidAI/d1-2B-GGUF",
     "quantization": "Q8_0",
-    "mode": "shadow_only"
+    "mode": "shadow_only",
+    "rules_file": "JUDGE_RULES.md",
+    "threshold": 0.5
   },
   "arms": [
     "sft",

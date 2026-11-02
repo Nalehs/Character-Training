@@ -9,3 +9,9 @@ checkpoints/
 *.safetensors
 *.pt
 *.bin
+# Private character material: full core and style stay local.
+characters/*/core.md
+characters/*/style.md
+# Pushback environment outputs
+outputs/
+*.egg-info/
