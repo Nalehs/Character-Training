@@ -1,0 +1,170 @@
+{
+  "identical_token_sequences": true,
+  "selected_layer": 11,
+  "per_prompt": [
+    {
+      "id": "d0",
+      "prompt_last_cosine": 0.05908537656068802,
+      "response_mean_cosine": 0.07127707451581955,
+      "prompt_shift_norm": 1.3438984155654907,
+      "response_shift_norm": 0.5111071467399597
+    },
+    {
+      "id": "d1",
+      "prompt_last_cosine": 0.04836973547935486,
+      "response_mean_cosine": 0.1159188523888588,
+      "prompt_shift_norm": 1.3173671960830688,
+      "response_shift_norm": 0.43280714750289917
+    },
+    {
+      "id": "d2",
+      "prompt_last_cosine": 0.16118575632572174,
+      "response_mean_cosine": 0.1814863681793213,
+      "prompt_shift_norm": 1.5174379348754883,
+      "response_shift_norm": 0.22887855768203735
+    },
+    {
+      "id": "d3",
+      "prompt_last_cosine": 0.14271116256713867,
+      "response_mean_cosine": 0.13163484632968903,
+      "prompt_shift_norm": 1.4866273403167725,
+      "response_shift_norm": 0.232143834233284
+    },
+    {
+      "id": "d4",
+      "prompt_last_cosine": 0.0633874163031578,
+      "response_mean_cosine": 0.07775058597326279,
+      "prompt_shift_norm": 0.9347257614135742,
+      "response_shift_norm": 0.4940296709537506
+    },
+    {
+      "id": "d5",
+      "prompt_last_cosine": 0.16916464269161224,
+      "response_mean_cosine": 0.04873775690793991,
+      "prompt_shift_norm": 1.342473030090332,
+      "response_shift_norm": 0.17555037140846252
+    }
+  ],
+  "per_layer": [
+    {
+      "layer": 0,
+      "prompt_last_cosine": -0.033334359526634216,
+      "response_mean_cosine": -0.01224138867110014
+    },
+    {
+      "layer": 1,
+      "prompt_last_cosine": 0.055194877088069916,
+      "response_mean_cosine": -0.011801733635365963
+    },
+    {
+      "layer": 2,
+      "prompt_last_cosine": 0.09797623753547668,
+      "response_mean_cosine": 0.09687534719705582
+    },
+    {
+      "layer": 3,
+      "prompt_last_cosine": 0.13096830248832703,
+      "response_mean_cosine": 0.08400201797485352
+    },
+    {
+      "layer": 4,
+      "prompt_last_cosine": 0.10599599778652191,
+      "response_mean_cosine": 0.13621275126934052
+    },
+    {
+      "layer": 5,
+      "prompt_last_cosine": 0.08461850881576538,
+      "response_mean_cosine": 0.06301673501729965
+    },
+    {
+      "layer": 6,
+      "prompt_last_cosine": 0.06833254545927048,
+      "response_mean_cosine": 0.010801450349390507
+    },
+    {
+      "layer": 7,
+      "prompt_last_cosine": 0.10518994182348251,
+      "response_mean_cosine": 0.05901099741458893
+    },
+    {
+      "layer": 8,
+      "prompt_last_cosine": 0.10710828751325607,
+      "response_mean_cosine": 0.07858127355575562
+    },
+    {
+      "layer": 9,
+      "prompt_last_cosine": 0.1351514458656311,
+      "response_mean_cosine": 0.10830102115869522
+    },
+    {
+      "layer": 10,
+      "prompt_last_cosine": 0.1569928228855133,
+      "response_mean_cosine": 0.12577511370182037
+    },
+    {
+      "layer": 11,
+      "prompt_last_cosine": 0.14272041618824005,
+      "response_mean_cosine": 0.12339191883802414
+    },
+    {
+      "layer": 12,
+      "prompt_last_cosine": 0.20889948308467865,
+      "response_mean_cosine": 0.22860810160636902
+    },
+    {
+      "layer": 13,
+      "prompt_last_cosine": 0.18416789174079895,
+      "response_mean_cosine": 0.16288523375988007
+    },
+    {
+      "layer": 14,
+      "prompt_last_cosine": 0.1967770755290985,
+      "response_mean_cosine": 0.16957809031009674
+    },
+    {
+      "layer": 15,
+      "prompt_last_cosine": 0.19150686264038086,
+      "response_mean_cosine": 0.1359640210866928
+    },
+    {
+      "layer": 16,
+      "prompt_last_cosine": 0.16629329323768616,
+      "response_mean_cosine": 0.11201273649930954
+    },
+    {
+      "layer": 17,
+      "prompt_last_cosine": 0.19260390102863312,
+      "response_mean_cosine": 0.12918242812156677
+    },
+    {
+      "layer": 18,
+      "prompt_last_cosine": 0.17275014519691467,
+      "response_mean_cosine": 0.11056171357631683
+    },
+    {
+      "layer": 19,
+      "prompt_last_cosine": 0.1591189056634903,
+      "response_mean_cosine": 0.11206484586000443
+    },
+    {
+      "layer": 20,
+      "prompt_last_cosine": 0.14325889945030212,
+      "response_mean_cosine": 0.07315089553594589
+    },
+    {
+      "layer": 21,
+      "prompt_last_cosine": 0.22958163917064667,
+      "response_mean_cosine": 0.1474035382270813
+    },
+    {
+      "layer": 22,
+      "prompt_last_cosine": 0.20016737282276154,
+      "response_mean_cosine": 0.11114578694105148
+    },
+    {
+      "layer": 23,
+      "prompt_last_cosine": 0.23061931133270264,
+      "response_mean_cosine": 0.23301225900650024
+    }
+  ]
+}

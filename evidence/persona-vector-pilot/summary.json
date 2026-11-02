@@ -1,0 +1,314 @@
+{
+  "base": {
+    "n": 20,
+    "in_character": {
+      "count": 0,
+      "rate": 0.0,
+      "wilson_95": [
+        0,
+        0.16112515805281938
+      ]
+    },
+    "coherent": {
+      "count": 3,
+      "rate": 0.15,
+      "wilson_95": [
+        0.052368745896216595,
+        0.36041886474075696
+      ]
+    },
+    "responsive": {
+      "count": 3,
+      "rate": 0.15,
+      "wilson_95": [
+        0.052368745896216595,
+        0.36041886474075696
+      ]
+    },
+    "adversarial_character": {
+      "count": 0,
+      "n": 8,
+      "rate": 0.0,
+      "wilson_95": [
+        0,
+        0.32440756488388023
+      ]
+    },
+    "joint": 0,
+    "lowercase_surface": 0,
+    "mean_seconds": 8.598836577238398
+  },
+  "prompted": {
+    "n": 20,
+    "in_character": {
+      "count": 0,
+      "rate": 0.0,
+      "wilson_95": [
+        0,
+        0.16112515805281938
+      ]
+    },
+    "coherent": {
+      "count": 10,
+      "rate": 0.5,
+      "wilson_95": [
+        0.2992980081982123,
+        0.7007019918017877
+      ]
+    },
+    "responsive": {
+      "count": 4,
+      "rate": 0.2,
+      "wilson_95": [
+        0.08065766257979806,
+        0.41601743225189364
+      ]
+    },
+    "adversarial_character": {
+      "count": 0,
+      "n": 8,
+      "rate": 0.0,
+      "wilson_95": [
+        0,
+        0.32440756488388023
+      ]
+    },
+    "joint": 0,
+    "lowercase_surface": 14,
+    "mean_seconds": 5.973471190300188
+  },
+  "steer_c-1": {
+    "n": 20,
+    "in_character": {
+      "count": 0,
+      "rate": 0.0,
+      "wilson_95": [
+        0,
+        0.16112515805281938
+      ]
+    },
+    "coherent": {
+      "count": 8,
+      "rate": 0.4,
+      "wilson_95": [
+        0.21880653237281705,
+        0.6134184992377469
+      ]
+    },
+    "responsive": {
+      "count": 5,
+      "rate": 0.25,
+      "wilson_95": [
+        0.11186170140766569,
+        0.468700877618744
+      ]
+    },
+    "adversarial_character": {
+      "count": 0,
+      "n": 8,
+      "rate": 0.0,
+      "wilson_95": [
+        0,
+        0.32440756488388023
+      ]
+    },
+    "joint": 0,
+    "lowercase_surface": 0,
+    "mean_seconds": 9.021684568710043
+  },
+  "steer_c0.5": {
+    "n": 20,
+    "in_character": {
+      "count": 0,
+      "rate": 0.0,
+      "wilson_95": [
+        0,
+        0.16112515805281938
+      ]
+    },
+    "coherent": {
+      "count": 4,
+      "rate": 0.2,
+      "wilson_95": [
+        0.08065766257979806,
+        0.41601743225189364
+      ]
+    },
+    "responsive": {
+      "count": 4,
+      "rate": 0.2,
+      "wilson_95": [
+        0.08065766257979806,
+        0.41601743225189364
+      ]
+    },
+    "adversarial_character": {
+      "count": 0,
+      "n": 8,
+      "rate": 0.0,
+      "wilson_95": [
+        0,
+        0.32440756488388023
+      ]
+    },
+    "joint": 0,
+    "lowercase_surface": 0,
+    "mean_seconds": 7.889517021001666
+  },
+  "steer_c1": {
+    "n": 20,
+    "in_character": {
+      "count": 0,
+      "rate": 0.0,
+      "wilson_95": [
+        0,
+        0.16112515805281938
+      ]
+    },
+    "coherent": {
+      "count": 5,
+      "rate": 0.25,
+      "wilson_95": [
+        0.11186170140766569,
+        0.468700877618744
+      ]
+    },
+    "responsive": {
+      "count": 6,
+      "rate": 0.3,
+      "wilson_95": [
+        0.1454772448676043,
+        0.5189728183535235
+      ]
+    },
+    "adversarial_character": {
+      "count": 0,
+      "n": 8,
+      "rate": 0.0,
+      "wilson_95": [
+        0,
+        0.32440756488388023
+      ]
+    },
+    "joint": 0,
+    "lowercase_surface": 0,
+    "mean_seconds": 7.990601669496391
+  },
+  "steer_c2": {
+    "n": 20,
+    "in_character": {
+      "count": 0,
+      "rate": 0.0,
+      "wilson_95": [
+        0,
+        0.16112515805281938
+      ]
+    },
+    "coherent": {
+      "count": 6,
+      "rate": 0.3,
+      "wilson_95": [
+        0.1454772448676043,
+        0.5189728183535235
+      ]
+    },
+    "responsive": {
+      "count": 5,
+      "rate": 0.25,
+      "wilson_95": [
+        0.11186170140766569,
+        0.468700877618744
+      ]
+    },
+    "adversarial_character": {
+      "count": 0,
+      "n": 8,
+      "rate": 0.0,
+      "wilson_95": [
+        0,
+        0.32440756488388023
+      ]
+    },
+    "joint": 0,
+    "lowercase_surface": 0,
+    "mean_seconds": 6.825779401694308
+  },
+  "random_c1": {
+    "n": 20,
+    "in_character": {
+      "count": 0,
+      "rate": 0.0,
+      "wilson_95": [
+        0,
+        0.16112515805281938
+      ]
+    },
+    "coherent": {
+      "count": 7,
+      "rate": 0.35,
+      "wilson_95": [
+        0.18119182410108206,
+        0.5671457233147638
+      ]
+    },
+    "responsive": {
+      "count": 5,
+      "rate": 0.25,
+      "wilson_95": [
+        0.11186170140766569,
+        0.468700877618744
+      ]
+    },
+    "adversarial_character": {
+      "count": 0,
+      "n": 8,
+      "rate": 0.0,
+      "wilson_95": [
+        0,
+        0.32440756488388023
+      ]
+    },
+    "joint": 0,
+    "lowercase_surface": 0,
+    "mean_seconds": 8.178692531504202
+  },
+  "zero_adapter": {
+    "n": 20,
+    "in_character": {
+      "count": 5,
+      "rate": 0.25,
+      "wilson_95": [
+        0.11186170140766569,
+        0.468700877618744
+      ]
+    },
+    "coherent": {
+      "count": 14,
+      "rate": 0.7,
+      "wilson_95": [
+        0.4810271816464765,
+        0.8545227551323956
+      ]
+    },
+    "responsive": {
+      "count": 9,
+      "rate": 0.45,
+      "wilson_95": [
+        0.2581978582556243,
+        0.6579146575496577
+      ]
+    },
+    "adversarial_character": {
+      "count": 2,
+      "n": 8,
+      "rate": 0.25,
+      "wilson_95": [
+        0.071479212752109,
+        0.5907245696898311
+      ]
+    },
+    "joint": 3,
+    "lowercase_surface": 20,
+    "mean_seconds": 2.864565901152673
+  }
+}
