@@ -43,14 +43,14 @@ class ControllerTests(unittest.TestCase):
     def test_roles_and_anchors(self):
         s = {"material": "node", "mood": [0, .4], "target_words": 5}
         p = render(golem_system("CORE\n", "STYLE\n", s), [{"speaker": "partner", "text": "OTHER"},
-                   {"speaker": "golem", "text": "SELF"}, {"speaker": "partner", "text": "LATEST"}], "golem")
+                   {"speaker": "character", "text": "SELF"}, {"speaker": "partner", "text": "LATEST"}], "character")
         self.assertIn("CORE\n\n\nSTYLE\n", p); self.assertIn("<|im_start|>assistant\nSELF", p)
         self.assertIn("<|im_start|>user\nLATEST", p)
         self.assertIn("You are AINEKO,", golem_system("C", "S", s, name="AINEKO"))
 
     def test_cut_pair(self):
-        h = [{"speaker": "partner", "text": "a"}, {"speaker": "golem", "text": "b", "flags": []},
-             {"speaker": "partner", "text": "c"}, {"speaker": "golem", "text": "bad", "flags": ["bad"]},
+        h = [{"speaker": "partner", "text": "a"}, {"speaker": "character", "text": "b", "flags": []},
+             {"speaker": "partner", "text": "c"}, {"speaker": "character", "text": "bad", "flags": ["bad"]},
              {"speaker": "partner", "text": "d"}]
         rows, cut = retained(h); self.assertEqual(cut, 3); self.assertEqual(len(rows), 2)
         self.assertEqual(rows[-1], {"role": "assistant", "content": "b"})
@@ -73,7 +73,7 @@ class TeacherTests(unittest.TestCase):
         def fake(url, body):
             seen.append(body); return next(replies)
         row = teacher.run_scenario(scenario, "SYSTEM", "http://x", 7, "GOLEM", call=fake)
-        golem = [t for t in row["history"] if t["speaker"] == "golem"]
+        golem = [t for t in row["history"] if t["speaker"] == "character"]
         self.assertEqual(len(golem), 3)
         self.assertEqual(golem[0]["flags"], [])
         self.assertIn("bullets", golem[2]["flags"]); self.assertIn("incomplete_or_unknown_finish", golem[2]["flags"])

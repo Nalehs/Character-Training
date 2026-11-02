@@ -79,7 +79,7 @@ def render(system,hist,speaker):
     if not hist:
         msgs.append({"role":"user","content":"Begin with your own concrete question or request to GOLEM, from your stated situation. Do not ask GOLEM to supply your situation."})
     else:
-        msgs += [{"role":"assistant" if r["speaker"]==speaker else "user","content":r["text"]} for r in hist]
+        msgs += [{"role":"assistant" if r["speaker"] in (speaker, "golem") else "user","content":r["text"]} for r in hist]
     return "".join("<|im_start|>"+m["role"]+"\n"+m["content"]+"<|im_end|>\n" for m in msgs)+"<|im_start|>assistant\n<think>\n\n</think>\n\n"
 def hygiene(text,finish_reason=None,name="GOLEM"):
     flags=[]
@@ -103,7 +103,7 @@ def retained(hist):
     """Keep only intact paired prefix before first defective character target. Never repair."""
     out=[];cut=None
     for i,r in enumerate(hist):
-        if r["speaker"]=="golem" and r.get("flags"):
+        if r["speaker"]!="partner" and r.get("flags"):  # "character" (older G6 files: "golem")
             cut=i;break
         out.append(r)
     if out and out[-1]["speaker"]=="partner":out.pop()

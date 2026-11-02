@@ -6,7 +6,7 @@ def convo(sid, seed, replies, flags=None):
     h = []
     for i, r in enumerate(replies):
         h.append({"speaker": "partner", "text": f"q{i}"})
-        h.append({"speaker": "golem", "text": r, "flags": (flags or {}).get(i, [])})
+        h.append({"speaker": "character", "text": r, "flags": (flags or {}).get(i, [])})
     return {"scenario_id": sid, "seed": seed, "history": h}
 
 

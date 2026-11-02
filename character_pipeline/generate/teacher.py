@@ -74,7 +74,7 @@ def run_scenario(scenario: dict, system: str, url: str, seed: int, name: str,
     hist, turns = [], []
     for i, caller in enumerate(scenario["caller_turns"]):
         hist.append({"speaker": "partner", "text": caller})
-        prompt = render(system, hist, "golem")
+        prompt = render(system, hist, "character")
         body = request_body(prompt, seed + i)
         started = time.monotonic()
         response = call(url, body)
@@ -82,7 +82,7 @@ def run_scenario(scenario: dict, system: str, url: str, seed: int, name: str,
         finish = finish_reason(response)
         flags = mechanical(text, finish) + [f for f in hygiene(text, finish, name=name)
                                             if f not in ("empty", "incomplete")]
-        row = {"speaker": "golem", "text": text, "finish_reason": finish, "flags": flags,
+        row = {"speaker": "character", "text": text, "finish_reason": finish, "flags": flags,
                "request_sha256": canonical_hash(body), "response_sha256": canonical_hash(response),
                "tokens_predicted": response.get("tokens_predicted"),
                "elapsed_seconds": time.monotonic() - started}
@@ -114,7 +114,7 @@ def main(argv=None):
             row = run_scenario(scenario, system, args.url, rng.randrange(1 << 30), character.name)
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
             f.flush()
-            print(scenario["id"], [t["flags"] for t in row["history"] if t["speaker"] == "golem"], flush=True)
+            print(scenario["id"], [t["flags"] for t in row["history"] if t["speaker"] != "partner"], flush=True)
 
 
 if __name__ == "__main__":

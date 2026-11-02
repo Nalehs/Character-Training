@@ -84,9 +84,9 @@ class RunLoop(unittest.TestCase):
                                                   "owner": "caller", "status": "caller_report"}], []]}
         row = {"scenario_id": "s", "seed": 1, "history": [
             {"speaker": "partner", "text": "The wheel rubs."},
-            {"speaker": "golem", "text": "The wheel rubs.", "finish_reason": "stop", "flags": []},
+            {"speaker": "character", "text": "The wheel rubs.", "finish_reason": "stop", "flags": []},
             {"speaker": "partner", "text": "Did you send it?"},
-            {"speaker": "golem", "text": "I sent the report.", "finish_reason": "stop", "flags": []}]}
+            {"speaker": "character", "text": "I sent the report.", "finish_reason": "stop", "flags": []}]}
         def fake(url, body):
             if "I sent the report." in body["prompt"]:
                 return {"content": NONE, "stop_type": "eos"}

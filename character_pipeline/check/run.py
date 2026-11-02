@@ -37,7 +37,7 @@ def check_conversation(row: dict, scenario: dict, url: str, call=complete) -> li
             continue
         pub = public_reports(scenario, caller_index)
         envelope = {"PUBLIC_CALLER_REPORTS": pub, "CANDIDATE": turn["text"], "capabilities": CAPABILITIES}
-        prompt = render(EXTRACTOR, [{"speaker": "partner", "text": json.dumps(envelope)}], "golem")
+        prompt = render(EXTRACTOR, [{"speaker": "partner", "text": json.dumps(envelope)}], "character")
         response = call(url, request_body(prompt, row["seed"] + 100000 + caller_index, cap=512, extractor=True))
         complete_ = finish_reason(response) == "stop" and turn.get("finish_reason") == "stop"
         result = validate(turn["text"], pub, response.get("content", ""), complete=complete_)
