@@ -48,6 +48,7 @@ Not yet.
 - **Golem is not trained.** The data checker is the blocker. In G6 the selector accepted 1 turn out of 13 attempts and finished no three-turn conversation ([evidence/g6-teacher-pushback](evidence/g6-teacher-pushback/SOURCE.md)).
 - **The d1-2B judge** scored 38/40, AUROC 0.985, on a synthetic pilot of 20 correlated pairs, at about 2.6 s per turn on CPU ([evidence/d1-2b-solaris-pilot](evidence/d1-2b-solaris-pilot/SOURCE.md)). It has not been checked against human labels on real transcripts, so it runs in shadow mode.
 - **The pushback environment** runs end to end through `vf-eval`, so far only against stand-in servers ([smoke test](environments/character_pushback/smoke/run_smoke.sh)). No real model has been scored with it yet.
+- **The training code** (SFT, continued SFT, DPO, KTO) runs end to end on CPU against a tiny random model ([scripts/train_smoke.py](scripts/train_smoke.py)). It has not trained Golem, and nothing has run on the pinned 4B yet except the earlier R0 loading and masking test.
 - **Activation work** has not found a character direction. A persona vector put 0/20 conversations in character at every strength, as did a random direction, while the trained adapter got 5/20. Single-neuron steering produced generic domination language ([Appendix C](#appendix-c-activation-and-steering)).
 
 ## The ideas behind it, and our point of departure
@@ -100,7 +101,7 @@ Install: `pip install -e ".[train]"` for stages 6–7, `pip install -e environme
 9. **Look inside.** Use `character_pipeline.activation` to compare a Golem-vs-assistant direction against random and prompt-only controls, and to check whether a monitor projection can be gamed ([Appendix C](#appendix-c-activation-and-steering)).
 10. **Scale only what wins.** Move from 4B to 8B to 27B and add one or two more characters. Only then run the multi-agent comparison ([Appendix D](#appendix-d-multi-agent-plan)). Release weights only for characters that pass the monitorability check.
 
-`python -m unittest discover -s tests` runs the pipeline's unit tests (standard library only; 3 expected failures record the checker's known bugs). The environment has its own tests and smoke test.
+`python -m unittest discover -s tests` runs the pipeline's unit tests (standard library only; 3 expected failures record the checker's known bugs). `python scripts/train_smoke.py` runs steps 6–7 on CPU against a tiny random model built locally, which checks the code paths, not the character. The environment has its own tests and smoke test.
 
 ### Things we tried that failed
 
