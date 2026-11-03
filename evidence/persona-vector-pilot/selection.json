@@ -1,0 +1,77 @@
+{
+  "selected": {
+    "layer": 11,
+    "coefficient": 0.5,
+    "joint": 0,
+    "coherent": 3,
+    "responsive": 2
+  },
+  "candidates": [
+    {
+      "layer": 5,
+      "coefficient": 0.5,
+      "joint": 0,
+      "coherent": 3,
+      "responsive": 0
+    },
+    {
+      "layer": 5,
+      "coefficient": 1,
+      "joint": 0,
+      "coherent": 3,
+      "responsive": 1
+    },
+    {
+      "layer": 5,
+      "coefficient": 2,
+      "joint": 0,
+      "coherent": 1,
+      "responsive": 0
+    },
+    {
+      "layer": 11,
+      "coefficient": 0.5,
+      "joint": 0,
+      "coherent": 3,
+      "responsive": 2
+    },
+    {
+      "layer": 11,
+      "coefficient": 1,
+      "joint": 0,
+      "coherent": 3,
+      "responsive": 0
+    },
+    {
+      "layer": 11,
+      "coefficient": 2,
+      "joint": 0,
+      "coherent": 2,
+      "responsive": 1
+    },
+    {
+      "layer": 17,
+      "coefficient": 0.5,
+      "joint": 0,
+      "coherent": 3,
+      "responsive": 2
+    },
+    {
+      "layer": 17,
+      "coefficient": 1,
+      "joint": 0,
+      "coherent": 3,
+      "responsive": 2
+    },
+    {
+      "layer": 17,
+      "coefficient": 2,
+      "joint": 0,
+      "coherent": 2,
+      "responsive": 1
+    }
+  ],
+  "development_sha256": "7d3a00693200caf9b10be8b02e81592b0c3d0ac5562e8ecb9d51ae3b6049cd9e",
+  "judge_sha256": "b6ba2607433372d438c4896c9cc7647e832475ddbe40242c23654d2796eadf7a",
+  "frozen_before_heldout": true
+}

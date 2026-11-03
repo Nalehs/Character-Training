@@ -1,0 +1,34 @@
+[project]
+name = "character-pipeline"
+version = "0.2.0"
+description = "Train small open models toward a specific character and test whether it holds under pushback."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = []
+
+[project.scripts]
+character-pipeline = "character_pipeline.cli:main"
+
+[project.optional-dependencies]
+# Stage 6-7 training. Versions are the ones recorded in the completed runs
+# (aineko-character-training run 1 / OCT and golem-15 R0); newer releases may differ.
+train = [
+  "torch>=2.11",
+  "transformers>=5.3",
+  "peft>=0.18",
+  "trl==1.14.1",
+  "datasets>=4.8",
+  "accelerate>=1.12",
+]
+# Stage 5 diversity selection and stage 9 activation work.
+analysis = ["numpy>=1.26"]
+# The Prime Intellect verifiers environment lives in its own package under
+# environments/character_pushback; install it separately.
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["character_pipeline"]

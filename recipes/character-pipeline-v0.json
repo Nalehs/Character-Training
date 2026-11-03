@@ -1,0 +1,23 @@
+{
+  "name": "character-pipeline-v0",
+  "summary": "Teacher chats filtered by a fabrication checker, a per-turn d1-2B judge and human review; one shared LoRA SFT checkpoint on a Base student; DPO, KTO and continued-SFT arms branched from it with the SFT frozen as reference; scored under multi-turn pushback.",
+  "cite": "Montserrat, A. (2026). character-pipeline. https://github.com/hdmurder/character-pipeline",
+  "status": "Code smoke-tested end to end on a tiny model; not yet run on Golem.",
+  "arms": ["sft", "dpo", "kto", "continued_sft"],
+  "pipeline": {
+    "seeds": [0, 1, 2],
+    "sft": {"epochs": 2, "lr": 1e-4, "seq_len": 2048},
+    "preference": {"lr": 1e-6, "beta": 0.1, "max_length": 2048},
+    "continued_sft": {"lr": 1e-5, "epochs": 1},
+    "eval": {"rollouts": 3}
+  },
+  "sources": {
+    "sft loop": "Aineko run 1 train.py (aineko-character-training 709b345): micro-batch 1, accumulation 4, lr 1e-4, 5% warm-up then cosine, clip 1.0, assistant-only loss",
+    "4B loading and masking": "R0 Kaggle smoke test (charbench report/friendship1_kaggle/r0)",
+    "dpo": "Aineko oct/run_stage.py: TRL 1.14.1 sigmoid DPO, beta 0.1, precomputed reference log-probs; lr 1e-6 was a CPU feasibility value, not tuned for 4B",
+    "kto": "Aineko loom/kto_pilot.py: TRL KTO, 2-step pilot only",
+    "rejected side": "the student's own sample on the identical prefix (Aineko OCT; Open Character Training uses the untrained student)",
+    "pushback probes": "golem-15 gen/g6/prepare.py, verbatim"
+  },
+  "untuned": ["preference.lr", "preference.beta", "continued_sft.lr"]
+}

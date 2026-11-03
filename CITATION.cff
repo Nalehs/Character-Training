@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this pipeline or its pushback environment, please cite it, and cite the recipes you compare against (see references/REFERENCES.md)."
+title: "character-pipeline: training and stress-testing many AI characters"
+authors:
+  - family-names: Montserrat
+    given-names: Alexandre
+    affiliation: "bianjie.systems, Berlin"
+repository-code: "https://github.com/hdmurder/character-pipeline"
+license: MIT
+date-released: "2026-11-03"
+keywords: [character training, persona, DPO, KTO, sycophancy, pushback, multi-agent, verifiers]

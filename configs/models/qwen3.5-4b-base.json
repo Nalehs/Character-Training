@@ -1,0 +1,25 @@
+{
+  "id": "qwen3.5-4b-base",
+  "hf": "Qwen/Qwen3.5-4B-Base",
+  "revision": "1001bb4d826a52d1f399e183466143f4da7b741b",
+  "params_b": 4,
+  "layers": 32,
+  "status": "pinned",
+  "used_in": [
+    "R0 Kaggle smoke test: fp16 LoRA on one T4 (RECIPE.md)",
+    "Golem student (characters/golem-15/config.json)"
+  ],
+  "hardware": "one 16 GB T4 for rank-16 LoRA in fp16 (R0); not yet run end to end",
+  "lora": {
+    "rank": 16,
+    "alpha": 32
+  },
+  "sft": {
+    "seq_len": 2048
+  },
+  "instruct": {
+    "hf": "Qwen/Qwen3.5-4B",
+    "revision": null,
+    "note": "post-trained sibling for the prompted_instruct control (Zero's headline comparison); pin a revision to enable it"
+  }
+}

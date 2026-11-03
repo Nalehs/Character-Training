@@ -1,0 +1,13 @@
+{
+  "source": "hdmurder/golem-15 character/graph.json at commit 4c1a6e7 (private; counts only)",
+  "graph_sha256": "210a850a894a7e611984fab736ff21e52ef32196ad0402b2d1b02f3b513e02e4",
+  "nodes": 110,
+  "edges": 281,
+  "directed": false,
+  "node_kinds": {
+    "null": 110
+  },
+  "edge_kinds": {
+    "null": 281
+  }
+}

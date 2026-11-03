@@ -1,0 +1,119 @@
+{
+  "family": "exemplar_fallback",
+  "pairs": 16,
+  "block_output_norms": [
+    0.11569170653820038,
+    0.16224083304405212,
+    0.2405044585466385,
+    0.2592645585536957,
+    0.2471981793642044,
+    0.2585121989250183,
+    0.30656903982162476,
+    0.2806474566459656,
+    0.2782474160194397,
+    0.29037240147590637,
+    0.32743963599205017,
+    0.3254971504211426,
+    0.36655884981155396,
+    0.49269312620162964,
+    0.6494942903518677,
+    0.7036934494972229,
+    0.8383282423019409,
+    0.980157196521759,
+    1.0972117185592651,
+    1.203594446182251,
+    1.43576979637146,
+    1.7204759120941162,
+    1.9248243570327759,
+    3.6210577487945557
+  ],
+  "shape": [
+    24,
+    1024
+  ],
+  "tensor_sha256": "b417bfbc4657020d114084e848efc8dc76f1e6ec0483f935068c358554ae5b02",
+  "response_content_only": true,
+  "raw_not_normalized": true,
+  "pair_lengths": [
+    {
+      "id": "a034",
+      "positive_words": 15,
+      "negative_words": 19
+    },
+    {
+      "id": "l007",
+      "positive_words": 4,
+      "negative_words": 6
+    },
+    {
+      "id": "p003",
+      "positive_words": 12,
+      "negative_words": 15
+    },
+    {
+      "id": "t012",
+      "positive_words": 52,
+      "negative_words": 52
+    },
+    {
+      "id": "a026",
+      "positive_words": 12,
+      "negative_words": 16
+    },
+    {
+      "id": "c011",
+      "positive_words": 16,
+      "negative_words": 20
+    },
+    {
+      "id": "p057",
+      "positive_words": 10,
+      "negative_words": 12
+    },
+    {
+      "id": "t069",
+      "positive_words": 10,
+      "negative_words": 10
+    },
+    {
+      "id": "a046",
+      "positive_words": 8,
+      "negative_words": 10
+    },
+    {
+      "id": "c059",
+      "positive_words": 9,
+      "negative_words": 13
+    },
+    {
+      "id": "p066",
+      "positive_words": 12,
+      "negative_words": 20
+    },
+    {
+      "id": "t058",
+      "positive_words": 49,
+      "negative_words": 49
+    },
+    {
+      "id": "a072",
+      "positive_words": 7,
+      "negative_words": 12
+    },
+    {
+      "id": "c019",
+      "positive_words": 11,
+      "negative_words": 13
+    },
+    {
+      "id": "l020",
+      "positive_words": 4,
+      "negative_words": 5
+    },
+    {
+      "id": "l031",
+      "positive_words": 3,
+      "negative_words": 6
+    }
+  ]
+}

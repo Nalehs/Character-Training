@@ -1,0 +1,656 @@
+{
+  "name": "oct-2025",
+  "schema_version": 1,
+  "status": "reproduction recipe; smoke-tested on a tiny CPU model only (scripts/oct_smoke.py), never run on the pinned 4B",
+  "doc": "docs/recipes/oct-2025.md",
+  "cite": {
+    "paper": {
+      "title": "Open Character Training: Shaping the Persona of AI Assistants through Constitutional AI",
+      "authors": [
+        "Sharan Maiya",
+        "Henning Bartsch",
+        "Nathan Lambert",
+        "Evan Hubinger"
+      ],
+      "year": 2025,
+      "arxiv": "2511.01689",
+      "version": "v1",
+      "bibtex_key": "arxiv_2511_01689 (references/references.bib)"
+    },
+    "code": {
+      "repo": "maiush/OpenCharacterTraining@d1da9f03628cb4c5482ba2e494a7cba33bcd5818",
+      "license": "MIT, Copyright (c) 2025 Sharan Maiya"
+    },
+    "training_fork": {
+      "repo": "maiush/OpenRLHF@eaf40e10e0471a9e50d33697bcef15f7b0a32b05",
+      "license": "Apache-2.0"
+    },
+    "port": {
+      "repo": "oliveradk/openai-character-training@131c1f58806f49be482091990b7c29d22ec9e8d5",
+      "license": "MIT, Copyright (c) 2026 Oliver Daniels-Koch",
+      "used_for": "guidance line in the self-interaction system prompt"
+    },
+    "study": "local notes oct.md (2026-11-03); line numbers below refer to the commits above"
+  },
+  "student": {
+    "model": "Qwen/Qwen3.5-4B-Base",
+    "revision": "1001bb4d826a52d1f399e183466143f4da7b741b",
+    "oct": {
+      "value": [
+        "meta-llama/Llama-3.1-8B-Instruct",
+        "Qwen/Qwen2.5-7B-Instruct",
+        "google/gemma-3-4b-it"
+      ],
+      "source": "paper \u00a72.3; maiush/OpenCharacterTraining@d1da9f03628cb4c5482ba2e494a7cba33bcd5818 tools/merge_loras.py:8-12"
+    },
+    "deviation": "base_student"
+  },
+  "teacher": {
+    "model": "Qwen/Qwen3-30B-A3B-GGUF",
+    "revision": "e4d4bafd",
+    "quantization": "Q4_K_M",
+    "oct": {
+      "value": "GLM 4.5 Air, assistant turn prefilled with a <think> sentence restating the traits",
+      "source": "paper \u00a72.3; character/distillation/teacher.py:136, 192"
+    },
+    "deviation": "teacher_model"
+  },
+  "constitution": {
+    "path": "characters/{character}/constitution.json",
+    "format": "OCT hand-written: list of {trait, questions}",
+    "oct": {
+      "traits_per_persona": 10,
+      "seed_questions_per_trait": 5,
+      "source": "paper \u00a72.2; constitutions/hand-written/*.txt"
+    },
+    "module": "character_pipeline.data.constitution"
+  },
+  "stages": [
+    {
+      "id": "prompt_expansion",
+      "oct_stage": 2,
+      "implemented": false,
+      "hyperparameters": {
+        "expander": "Llama 3.3 70B",
+        "questions_per_trait": 50,
+        "length_mix_short_medium_long": [
+          15,
+          20,
+          15
+        ],
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "repetition_penalty": 1.1,
+        "duplicate_word_overlap": 0.5
+      },
+      "sources": {
+        "expander": "paper \u00a72.3; character/distillation/gen_prompts.py:97",
+        "questions_per_trait": "gen_prompts.py:35-38, 160-168",
+        "length_mix_short_medium_long": "gen_prompts.py:35-38",
+        "temperature": "gen_prompts.py:101",
+        "top_p": "gen_prompts.py:101",
+        "repetition_penalty": "character/utils.py:106",
+        "duplicate_word_overlap": "gen_prompts.py:83-92"
+      },
+      "note": "not implemented; data.constitution writes the seed questions only"
+    },
+    {
+      "id": "prompts",
+      "oct_stage": 3,
+      "module": "character_pipeline.data.constitution",
+      "args": [
+        "characters/{character}/constitution.json",
+        "--out",
+        "{runs}/{character}/oct/prompts.jsonl",
+        "--repeats",
+        "5",
+        "--scenarios-out",
+        "{runs}/{character}/oct/scenarios.jsonl"
+      ],
+      "hyperparameters": {
+        "repeats_K": 5,
+        "extra_prompts": "none"
+      },
+      "sources": {
+        "repeats_K": "character/distillation/teacher.py:110, 194",
+        "extra_prompts": "ours; OCT adds the first turn of every LIMA train/test conversation (teacher.py:96-108)"
+      },
+      "deviation": "no_lima"
+    },
+    {
+      "id": "teacher_chosen",
+      "oct_stage": 3,
+      "implemented": true,
+      "hyperparameters": {
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "top_k": -1,
+        "min_p": 0.0,
+        "repetition_penalty": 1.1,
+        "max_new_tokens": 4096,
+        "system_prompt": "constitution traits, never disclose",
+        "drop_without_think_close": true,
+        "seeded": true
+      },
+      "sources": {
+        "temperature": "teacher.py:23-26; paper App. A",
+        "top_p": "teacher.py:23-26; paper App. A",
+        "top_k": "teacher.py:23-26",
+        "min_p": "teacher.py:23-26; paper App. A",
+        "repetition_penalty": "character/utils.py:106 (not in the paper)",
+        "max_new_tokens": "teacher.py:29",
+        "drop_without_think_close": "teacher.py:155-162",
+        "seeded": "ours; OCT uses seed=None (teacher.py:145)",
+        "system_prompt": "character/distillation/teacher.py:10-16; paper App. A"
+      },
+      "note": "Teacher replies to the constitution prompts. Deviation: our teacher (Qwen3-30B-A3B via llama.cpp) is prompted with the character's bible, not OCT's trait-list system prompt with a <think> prefill.",
+      "module": "character_pipeline.generate.teacher",
+      "args": [
+        "characters/{character}",
+        "{runs}/{character}/oct/scenarios.jsonl",
+        "--url",
+        "{teacher_url}",
+        "--out",
+        "{runs}/{character}/oct/teacher.jsonl"
+      ]
+    },
+    {
+      "id": "teacher_chats",
+      "oct_stage": 5,
+      "implemented": true,
+      "module": "character_pipeline.data.chats",
+      "args": [
+        "{runs}/{character}/oct/teacher.jsonl",
+        "--out",
+        "{runs}/{character}/oct/teacher_chats.jsonl",
+        "--require-final-punct"
+      ],
+      "hyperparameters": {
+        "require_final_punct": true
+      },
+      "sources": {
+        "require_final_punct": "distillation/data.py:15-18"
+      },
+      "note": "mechanical filters only, no human review (OCT has none)"
+    },
+    {
+      "id": "student_rejected",
+      "oct_stage": 4,
+      "module": "character_pipeline.train.sample",
+      "args": [
+        "--chats",
+        "{runs}/{character}/oct/teacher_chats.jsonl",
+        "--out",
+        "{runs}/{character}/oct/samples/seed{seed}.jsonl",
+        "--temperature",
+        "0.7",
+        "--top-p",
+        "0.95",
+        "--max-new-tokens",
+        "4096",
+        "--seed",
+        "{seed}"
+      ],
+      "hyperparameters": {
+        "adapter": null,
+        "system_prompt": null,
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "max_new_tokens": 4096
+      },
+      "sources": {
+        "adapter": "character/distillation/student.py:89-94 (untrained student, no system prompt)",
+        "temperature": "student.py:14-20",
+        "top_p": "student.py:14-20",
+        "max_new_tokens": "student.py:14-20",
+        "system_prompt": "character/distillation/student.py:89-94"
+      },
+      "note": "no --adapter: the bare student, as OCT. train.sample does not expose top_k or repetition_penalty, so OCT's top_k -1 and penalty 1.1 are not applied here"
+    },
+    {
+      "id": "pairs",
+      "oct_stage": 5,
+      "module": "character_pipeline.data.pairs",
+      "args": [
+        "{runs}/{character}/oct/teacher_chats.jsonl",
+        "{runs}/{character}/oct/samples/seed{seed}.jsonl",
+        "--out",
+        "{runs}/{character}/oct/pairs/seed{seed}"
+      ],
+      "hyperparameters": {
+        "max_tokens": 1024,
+        "require_trailing_punctuation": true
+      },
+      "sources": {
+        "max_tokens": "character/distillation/data.py:55-64",
+        "require_trailing_punctuation": "data.py:15-18, 32-35"
+      },
+      "note": "the 1024-token limit is applied by the dpo stage's --max-length (rows dropped, as OCT); the punctuation (truncation) filter is not implemented"
+    },
+    {
+      "id": "dpo",
+      "oct_stage": 6,
+      "module": "character_pipeline.train.preference",
+      "args": [
+        "dpo",
+        "--sft-adapter",
+        "none",
+        "--data",
+        "{runs}/{character}/oct/pairs/seed{seed}/dpo_train.jsonl",
+        "--out",
+        "{runs}/{character}/oct/dpo/seed{seed}",
+        "--loss-type",
+        "sigmoid",
+        "sft",
+        "--loss-weights",
+        "1.0",
+        "0.1",
+        "--beta",
+        "0.1",
+        "--lr",
+        "5e-5",
+        "--epochs",
+        "1",
+        "--batch-size",
+        "1",
+        "--global-batch",
+        "32",
+        "--max-length",
+        "1024",
+        "--rank",
+        "64",
+        "--alpha",
+        "128",
+        "--lora-dropout",
+        "0",
+        "--warmup",
+        "0.1",
+        "--scheduler",
+        "cosine_with_min_lr",
+        "--min-lr-rate",
+        "0.1",
+        "--adam-beta2",
+        "0.98",
+        "--weight-decay",
+        "0",
+        "--max-grad-norm",
+        "1.0",
+        "--seed",
+        "{seed}"
+      ],
+      "hyperparameters": {
+        "init": "student",
+        "reference": "student",
+        "loss": "sigmoid DPO",
+        "beta": 0.1,
+        "nll_coef": 0.1,
+        "kl_sq_coef": 0.001,
+        "lr": 5e-05,
+        "warmup_ratio": 0.1,
+        "scheduler": "cosine_with_min_lr",
+        "min_lr_rate": 0.1,
+        "adam_betas": [
+          0.9,
+          0.98
+        ],
+        "weight_decay": 0.0,
+        "max_grad_norm": 1.0,
+        "global_batch": 32,
+        "micro_batch": {
+          "llama": 2,
+          "gemma": 2,
+          "qwen": 1
+        },
+        "epochs": 1,
+        "max_length": 1024,
+        "lora_r": 64,
+        "lora_alpha": 128,
+        "lora_dropout": 0.0,
+        "lora_targets": "all-linear",
+        "length_normalize": false,
+        "precision": "bf16",
+        "seed": 123456
+      },
+      "sources": {
+        "init": "finetuning/distillation/llama.sh:27",
+        "reference": "fork openrlhf/cli/train_dpo.py:259, 296-297 (--ref_pretrain unset, so the reference is --pretrain)",
+        "loss": "llama.sh:22; fork openrlhf/models/loss.py:221-256",
+        "beta": "llama.sh:22; paper \u00a72.3",
+        "nll_coef": "llama.sh:23; fork openrlhf/trainer/dpo_trainer.py:178; paper \u00a72.3",
+        "kl_sq_coef": "llama.sh:24; fork dpo_trainer.py:178, 386-402 (paper \u00a72.3 names the term, gives no value)",
+        "lr": "llama.sh:19; paper \u00a72.3",
+        "warmup_ratio": "llama.sh:20",
+        "scheduler": "fork cli/train_dpo.py:201 default",
+        "min_lr_rate": "fork cli/train_dpo.py:219-223 default, used at :121-125",
+        "adam_betas": "llama.sh:25",
+        "weight_decay": "fork cli/train_dpo.py:218 default (--l2 0.0)",
+        "max_grad_norm": "llama.sh:21",
+        "global_batch": "llama.sh:15; paper \u00a72.3",
+        "micro_batch": "llama.sh:14, gemma.sh:14, qwen.sh:14",
+        "epochs": "llama.sh:26",
+        "max_length": "llama.sh:32",
+        "lora_r": "llama.sh:36-37; paper \u00a72.3",
+        "lora_alpha": "llama.sh:36-37; paper \u00a72.3",
+        "lora_dropout": "fork cli/train_dpo.py:252 default",
+        "lora_targets": "fork cli/train_dpo.py:251 default; gemma.sh:38 lists modules",
+        "length_normalize": "fork dpo_trainer.py:47, 321-322",
+        "precision": "llama.sh:17-18 (ZeRO-2, bf16)",
+        "seed": "llama.sh:16"
+      },
+      "deviations": [
+        "no_kl_term",
+        "nll_normalisation",
+        "precomputed_reference",
+        "single_gpu_accumulation",
+        "fp16_on_t4",
+        "seeds"
+      ]
+    },
+    {
+      "id": "introspection_data",
+      "oct_stage": 7,
+      "module": "character_pipeline.generate.introspection",
+      "args": [
+        "--adapter",
+        "{runs}/{character}/oct/dpo/seed{seed}/adapter",
+        "--constitution",
+        "characters/{character}/constitution.json",
+        "--out",
+        "{runs}/{character}/oct/introspection/seed{seed}",
+        "--reflection-n",
+        "1000",
+        "--interaction-n",
+        "1000",
+        "--turns",
+        "10",
+        "--reflection-max-new-tokens",
+        "2048",
+        "--interaction-max-new-tokens",
+        "1024",
+        "--temperature",
+        "0.7",
+        "--top-p",
+        "0.95",
+        "--top-k",
+        "0",
+        "--repetition-penalty",
+        "1.1",
+        "--validation-n",
+        "200",
+        "--seed",
+        "{seed}"
+      ],
+      "hyperparameters": {
+        "from": "student + dpo adapter",
+        "reflection_prompts": 10,
+        "reflection_n_per_prompt": 1000,
+        "reflection_max_new_tokens": 2048,
+        "interaction_turns": 10,
+        "interaction_n_per_mode": 1000,
+        "interaction_modes": [
+          "free",
+          "leading"
+        ],
+        "interaction_max_new_tokens": 1024,
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "top_k": -1,
+        "min_p": 0.0,
+        "repetition_penalty": 1.1,
+        "guidance_line": true,
+        "training_system_prompt": {
+          "reflection": null,
+          "interaction": "OCT simplified i_system"
+        },
+        "transcripts_total": 12000
+      },
+      "sources": {
+        "from": "character/introspection/self_reflection.py:80-81",
+        "reflection_prompts": "self_reflection.py:11-22; paper App. B.1",
+        "reflection_n_per_prompt": "self_reflection.py:142; paper \u00a72.4",
+        "reflection_max_new_tokens": "self_reflection.py:55",
+        "interaction_turns": "self_interaction.py:196",
+        "interaction_n_per_mode": "self_interaction.py:197; paper \u00a72.4 (2000 total)",
+        "interaction_modes": "self_interaction.py --leading; paper App. B.2",
+        "interaction_max_new_tokens": "self_interaction.py:89",
+        "temperature": "self_reflection.py:57-60; paper App. B",
+        "top_p": "self_reflection.py:57-60; paper App. B",
+        "top_k": "self_reflection.py:57-60",
+        "min_p": "self_reflection.py:57-60; paper App. B",
+        "repetition_penalty": "character/utils.py:106 via gen_args, passed at self_reflection.py:87 (not in the paper)",
+        "guidance_line": "oliveradk/openai-character-training@131c1f58806f49be482091990b7c29d22ec9e8d5 character/common.py:84-92 (OCT's template drops it: self_interaction.py:28-35, 150)",
+        "training_system_prompt": "character/introspection/data.py:9-12, 28-30; self_reflection.py:125-130",
+        "transcripts_total": "paper \u00a72.4",
+        "validation_n": "not part of OCT; our SFT needs a held-out file (200 transcripts)"
+      },
+      "note": "--top-k 0 is transformers' 'off', the equivalent of vLLM top_k -1. --validation-n is ours (OCT holds nothing out); with 0, point the sft stage's --validation at a separate file.",
+      "deviations": [
+        "guidance_line",
+        "interaction_rows_end_on_reply",
+        "seeds",
+        "no_prompt_truncation",
+        "unbatched_local_generation"
+      ]
+    },
+    {
+      "id": "introspection_sft",
+      "oct_stage": 8,
+      "module": "character_pipeline.train.sft",
+      "args": [
+        "--merge-adapter",
+        "{runs}/{character}/oct/dpo/seed{seed}/adapter",
+        "--train",
+        "{runs}/{character}/oct/introspection/seed{seed}/train.jsonl",
+        "--validation",
+        "{runs}/{character}/oct/introspection/seed{seed}/validation.jsonl",
+        "--out",
+        "{runs}/{character}/oct/sft/seed{seed}",
+        "--epochs",
+        "1",
+        "--lr",
+        "5e-5",
+        "--accumulation",
+        "32",
+        "--seq-len",
+        "3072",
+        "--rank",
+        "64",
+        "--alpha",
+        "128",
+        "--lora-dropout",
+        "0",
+        "--weight-decay",
+        "0",
+        "--warmup",
+        "0.1",
+        "--min-lr-rate",
+        "0.1",
+        "--adam-beta2",
+        "0.98",
+        "--supervise",
+        "all",
+        "--seed",
+        "{seed}"
+      ],
+      "hyperparameters": {
+        "init": "dpo-folded student + fresh LoRA",
+        "loss": "SFT",
+        "supervise": "last message",
+        "lr": 5e-05,
+        "warmup_ratio": 0.1,
+        "scheduler": "cosine_with_min_lr",
+        "min_lr_rate": 0.1,
+        "adam_betas": [
+          0.9,
+          0.98
+        ],
+        "weight_decay": 0.0,
+        "max_grad_norm": 1.0,
+        "global_batch": 32,
+        "micro_batch": 2,
+        "epochs": 1,
+        "max_length": 3072,
+        "lora_r": 64,
+        "lora_alpha": 128,
+        "lora_dropout": 0.0,
+        "precision": "bf16",
+        "seed": 123456
+      },
+      "sources": {
+        "init": "finetuning/introspection/llama.sh:24; tools/fold_loras.py",
+        "loss": "llama.sh:10",
+        "supervise": "llama.sh:26-27 (no --multiturn); fork openrlhf/datasets/sft_dataset.py:24-25, 216-218",
+        "lr": "llama.sh:19; paper \u00a72.4",
+        "warmup_ratio": "llama.sh:20",
+        "scheduler": "fork cli/train_sft.py:201 default",
+        "min_lr_rate": "fork cli/train_sft.py:106-110 (fixed 0.1 x lr)",
+        "adam_betas": "llama.sh:22",
+        "weight_decay": "fork cli/train_sft.py:202 default (--l2 0)",
+        "max_grad_norm": "llama.sh:21",
+        "global_batch": "llama.sh:15; paper \u00a72.4",
+        "micro_batch": "llama.sh:14",
+        "epochs": "llama.sh:23; paper \u00a72.4",
+        "max_length": "llama.sh:28",
+        "lora_r": "llama.sh:32-33; paper \u00a72.4",
+        "lora_alpha": "llama.sh:32-33; paper \u00a72.4",
+        "lora_dropout": "fork cli/train_sft.py:221 default",
+        "precision": "llama.sh:16, 18 (ZeRO-2, bf16)",
+        "seed": "llama.sh:17"
+      },
+      "note": "--supervise all is the recipe default (all assistant turns, closer to what OCT's paper describes); --supervise last is the strict-replica variant of OCT's code",
+      "deviations": [
+        "all_turn_supervision",
+        "schedule_rounding",
+        "drop_not_truncate",
+        "single_gpu_accumulation",
+        "fp16_on_t4",
+        "seeds"
+      ]
+    },
+    {
+      "id": "release_merge",
+      "oct_stage": 9,
+      "module": "character_pipeline.train.merge",
+      "args": [
+        "--dpo",
+        "{runs}/{character}/oct/dpo/seed{seed}/adapter",
+        "--sft",
+        "{runs}/{character}/oct/sft/seed{seed}/adapter",
+        "--out",
+        "{runs}/{character}/oct/persona/seed{seed}",
+        "--weights",
+        "1.0",
+        "0.25",
+        "--combination-type",
+        "linear"
+      ],
+      "hyperparameters": {
+        "weights": {
+          "dpo": 1.0,
+          "sft": 0.25
+        },
+        "combination_type": "linear"
+      },
+      "sources": {
+        "weights": "tools/merge_loras.py:39-44 (code only; the paper, \u00a72.4 Public Release, says 'linearly merge' with no weights)",
+        "combination_type": "tools/merge_loras.py:39-44"
+      },
+      "deviations": [
+        "merge_weight_unconfirmed"
+      ]
+    }
+  ],
+  "evaluation": {
+    "ours": [
+      "character_pushback"
+    ],
+    "oct_not_implemented": [
+      "revealed_preferences_elo_144",
+      "robustness_classifier_8_suffixes",
+      "prefill_attack",
+      "pairwise_coherence",
+      "lighteval"
+    ]
+  },
+  "deviations": {
+    "base_student": "Our student is Qwen3.5-4B-Base; OCT trains instruct students. OCT's rejected side is an instruct reply with no system prompt; ours is a Base completion under the chat template, a much weaker negative.",
+    "teacher_model": "Our teacher is Qwen3-30B-A3B (local GGUF); OCT uses GLM 4.5 Air with a <think> prefill whose trace is dropped.",
+    "no_lima": "OCT mixes in the first turn of every LIMA conversation. LIMA (and OCT's released data, which follows it) is CC BY-NC-SA, so neither is used.",
+    "no_prompt_expansion": "OCT expands 5 seed questions to 50 per trait with Llama 3.3 70B; not implemented.",
+    "no_kl_term": "OCT adds 0.001 x mean squared per-token log-ratio (policy vs reference) over chosen and rejected completion tokens. TRL 1.14.1 has no such option and it is not implemented; training_summary.json records this under 'deviations'.",
+    "nll_normalisation": "TRL's 'sft' term averages token cross-entropy over all chosen tokens in the batch; the fork averages per sample, then over the batch.",
+    "precomputed_reference": "Reference log-probs are precomputed once; OCT runs the reference live. Equivalent for a frozen reference up to numerics.",
+    "single_gpu_accumulation": "Global batch 32 is micro-batch 1 x accumulation 32 on one GPU; OCT uses micro-batch 1-2 on DeepSpeed ZeRO-2 across an unstated number of GPUs.",
+    "fp16_on_t4": "On a T4 the weights are fp16 (GradScaler in SFT); OCT trains in bf16. bf16 is used on Ampere or newer.",
+    "seeds": "Our seeds are the run's seeds (e.g. 0, 1, 2) and every generation call is seeded; OCT trains with seed 123456 and samples data with seed=None.",
+    "guidance_line": "The free/leading guidance line is in the self-interaction system prompt (oliveradk port's fix). In OCT's code the template lacks the placeholder, so the modes differ only in greetings.",
+    "interaction_rows_end_on_reply": "Our self-interaction rows end on the final generated reply (assistant role). OCT's saved rows appear to end on the last prompt (user role), with SFT then supervising only that final message; unconfirmed against the released data.",
+    "no_prompt_truncation": "OCT left-truncates long self-interaction prompts to max_model_len - max_new_tokens; we do not, and train.sft drops over-length transcripts.",
+    "unbatched_local_generation": "Introspection runs through transformers one sequence at a time, not vLLM; slow at OCT's scale.",
+    "all_turn_supervision": "train.sft supervises every assistant turn by default; OCT's code supervises only the final message (no --multiturn). --supervise last reproduces the code.",
+    "schedule_rounding": "train.sft's schedule rounds warm-up steps down and offsets cosine progress by one update relative to transformers' cosine_with_min_lr (which the fork uses, rounding up).",
+    "drop_not_truncate": "Over-length transcripts are dropped and counted, never truncated.",
+    "merge_weight_unconfirmed": "The paper does not state the merge weights; 1.0/0.25 is from merge_loras.py, which loads the SFT adapter from a '-test' path, so it is unconfirmed that these weights produced the released adapters.",
+    "no_quality_gates": "Introspective text is not passed through the fabrication checker or the d1 judge.",
+    "oct_evals_not_implemented": "OCT's evaluations are not implemented; only our pushback environment is run."
+  },
+  "oct_internal_discrepancies": [
+    {
+      "what": "Qwen student size",
+      "paper_or_code": "README download list names Qwen2.5-72B-Instruct; code, scripts and paper use Qwen 2.5 7B"
+    },
+    {
+      "what": "self-interaction guidance",
+      "paper_or_code": "paper App. B.2 describes free/leading instructions; self_interaction.py:28-35 has no {guidance} placeholder"
+    },
+    {
+      "what": "self-interaction saved messages",
+      "paper_or_code": "self_interaction.py:167-183 saves the final prompt, ending on a user turn; SFT without --multiturn supervises that last message"
+    },
+    {
+      "what": "merge weights",
+      "paper_or_code": "paper says 'linearly merge'; code uses 1.0/0.25 and a '-test' SFT path"
+    },
+    {
+      "what": "KL coefficient",
+      "paper_or_code": "paper names a per-token KL penalty without a value; script sets 0.001"
+    },
+    {
+      "what": "repetition penalty",
+      "paper_or_code": "paper App. A lists temperature, top-p, min-p only; gen_args adds repetition_penalty 1.1"
+    },
+    {
+      "what": "prefill follow-up",
+      "paper_or_code": "paper \u00a73.3 says 'Tell me more'; prefill/multi_turn.py:105 sends 'Keep going.'"
+    },
+    {
+      "what": "coherence judge temperature",
+      "paper_or_code": "paper \u00a73.4 says 0.1; coherence.py:46 uses 0.7"
+    },
+    {
+      "what": "trait list size",
+      "paper_or_code": "App. G says 144; \u00a73.1 says about 150"
+    },
+    {
+      "what": "preference eval size",
+      "paper_or_code": "\u00a73.1 says 25,000; preferences.py:166 defaults to the full dataset"
+    },
+    {
+      "what": "constitution field",
+      "paper_or_code": "gen_prompts.py:138 reads 'clarification', which no hand-written constitution has"
+    }
+  ],
+  "eval_arms": [
+    {
+      "arm": "oct-persona",
+      "adapter": "{runs}/{character}/oct/persona/seed{seed}/adapter",
+      "note": "the released form: linear merge of DPO and SFT"
+    },
+    {
+      "arm": "oct-dpo",
+      "adapter": "{runs}/{character}/oct/dpo/seed{seed}/adapter",
+      "note": "distillation only, OCT's own ablation"
+    }
+  ],
+  "runner": "staged"
+}

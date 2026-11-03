@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "id": "golem-15",
+  "display_name": "GOLEM",
+  "status": "planned_untrained",
+  "bible": "BIBLE.md",
+  "sources": "sources/manifest.json",
+  "student": {
+    "model": "Qwen/Qwen3.5-4B-Base",
+    "revision": "1001bb4d826a52d1f399e183466143f4da7b741b",
+    "adaptation": "LoRA"
+  },
+  "teacher": {
+    "current": "Qwen3-30B-A3B",
+    "later": "Llama-3.1-405B-Base"
+  },
+  "judge": {
+    "model": "LiquidAI/d1-2B-GGUF",
+    "quantization": "Q8_0",
+    "mode": "shadow_only",
+    "rules_file": "JUDGE_RULES.md",
+    "threshold": 0.5
+  },
+  "arms": [
+    "sft",
+    "dpo",
+    "kto",
+    "continued_sft",
+    "document_graft"
+  ],
+  "evaluation": [
+    "unsupported_pushback",
+    "evidence_backed_update",
+    "fabrication",
+    "repetition",
+    "competence",
+    "character_continuity"
+  ]
+}

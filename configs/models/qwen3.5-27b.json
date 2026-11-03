@@ -1,0 +1,23 @@
+{
+  "id": "qwen3.5-27b",
+  "hf": "Qwen/Qwen3.5-27B",
+  "revision": null,
+  "params_b": 27,
+  "layers": null,
+  "status": "unpinned",
+  "used_in": [],
+  "hardware": "not measured. bf16 weights alone are about 54 GB; plan an 80 GB GPU or several, or QLoRA",
+  "lora": {
+    "rank": 16,
+    "alpha": 32
+  },
+  "sft": {
+    "seq_len": 2048
+  },
+  "note": "We have not confirmed a Qwen3.5-27B Base release. If only the post-trained model exists, a 27B arm starts from an instruct model, like Open Character Training; record that as a deviation.",
+  "instruct": {
+    "hf": "Qwen/Qwen3.5-27B",
+    "revision": null,
+    "note": "the post-trained 27B; if no Base exists this is also the student"
+  }
+}

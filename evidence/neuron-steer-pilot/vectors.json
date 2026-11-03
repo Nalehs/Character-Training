@@ -1,0 +1,42 @@
+[
+  {
+    "layer": 13,
+    "neuron": 7956,
+    "dose": -1,
+    "median": 9.7441,
+    "column_norm": 0.4182725250720978,
+    "vector_norm": 9.744099617004395,
+    "tensor": {
+      "dtype": "BF16",
+      "shape": [
+        2560,
+        9216
+      ],
+      "data_offsets": [
+        1837629440,
+        1884815360
+      ]
+    },
+    "sha256": "57a1c0dbde6631d2715f59b5f37152f58c37ec16daab2077eb001f69fa614de9"
+  },
+  {
+    "layer": 14,
+    "neuron": 8949,
+    "dose": 1,
+    "median": 10.3534,
+    "column_norm": 0.4647177457809448,
+    "vector_norm": 10.353400230407715,
+    "tensor": {
+      "dtype": "BF16",
+      "shape": [
+        2560,
+        9216
+      ],
+      "data_offsets": [
+        1979187200,
+        2026373120
+      ]
+    },
+    "sha256": "0169cf062636bb6ce00cb4d367cab66a24bf2adcb107d2c4f65435a693f9ecf2"
+  }
+]

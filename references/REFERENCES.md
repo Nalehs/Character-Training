@@ -98,6 +98,52 @@ Operator geometry for deconstructing learned representations, including pruning 
 
 [neuronary](https://neuronary.org/) and the [Neuron Persona Library](https://neuronpersonas.com/) are exploratory catalogs, not validated persona mechanisms. Their recipes and identity-prompt outputs suggest hypotheses for held-out behavioral tests. Do not equate a memorable self-label with lasting character.
 
+## Character training: recent community research
+
+Summaries of these posts, with numbers and their locations, came out of a reading done for this repository on 2026-11-03. Each annotation below says how the post bears on our recipe or evals.
+
+**Character-trained models can struggle to generalise**, Mitrani, LessWrong, 25 May 2026. https://www.lesswrong.com/posts/EWsLQbGCfuCpXaBiP · code https://github.com/nmitrani/depth-character-training
+
+On the public Open Character Training checkpoints, a persona classifier recognises the character in chat replies far better than in emails written inside an agentic tool loop. For us this means testing the pushback probes in more than one scaffold (chat, memo, tool) and never claiming a character from chat results alone.
+
+**Eliciting Frontier Model Character Training**, Krishna, LessWrong, 16 Jan 2026; paper: Krishna, Chadalavada and Jo, *Same Voice, Different Lab: On the Homogenization of Frontier LLM Personalities*, arXiv 2605.02897. https://www.lesswrong.com/posts/x8QnZAHwkbeBkCsEx · code https://github.com/p3rciv3l/character_elicitation
+
+Revealed-preference trait profiles of frontier assistants correlate strongly across labs. This is the monoculture measured, and their harness is the natural diversity measure for our ecology.
+
+**Persona Geology: Underlying Structure in Character Training Adapters**, Ratnam and Africa, LessWrong, 30 Oct 2026. https://www.lesswrong.com/posts/iErBZ5fomL4tyyHy6 · adapters https://huggingface.co/EternalRecursion/persona-lora-zoo-qwen35
+
+134 character LoRAs on Qwen3.5-4B, our student family. The structure across adapters is largely predicted by the training pairs; behaviour appeared only at high LoRA rank; introspection adds a shared, trait-free register shift. This motivates scrambled-pair controls, reporting LoRA rank, and using their adapters as known-disposition calibration for our pushback environment.
+
+**Character Training Induces Motivation Clarification: A Clue to Claude 3 Opus**, Daniels, LessWrong, 25 Feb 2026. https://www.lesswrong.com/posts/v22JCsRBq9J9fqPJL
+
+After a small DPO run, a model explains its own good motives unprompted. The persona was also mode-collapsed. This is a reason to measure motive display and diversity (repetition, distinct-n) separately from holding a position.
+
+**Character training can mitigate reward hacking, but can also make it harder to detect**, Colognese and Ward, LessWrong, 28 Sep 2026 (rev. 14 Oct). https://www.lesswrong.com/posts/2maYXkEgnfJHPAkxh · code https://github.com/barbonara/character-reward-hacking
+
+An anti-cheating character sometimes reduced hacking, but when it did hack, monitors caught it far less often than for an openly pro-cheating character. This motivates the "disguised cave" outcome, monitor catch rates per arm, and monitorability as a release gate.
+
+**A List of Research Directions in Character Training**, Arike, LessWrong, 19 Mar 2026. https://www.lesswrong.com/posts/6EwuCH3vZ7qvPt82k
+
+Open questions this repository is built to test: on-policy distillation against DPO-then-SFT on the same evals, reflective stability, coherence when principles conflict, and when character training should happen relative to RL.
+
+## Character-training code we compare against
+
+**OpenCharacterTraining**, Maiya et al., MIT, studied at commit d1da9f0. https://github.com/maiush/OpenCharacterTraining. Its DPO loss lives in the fork https://github.com/maiush/OpenRLHF (Apache-2.0, eaf40e1).
+
+**openai-character-training**, Daniels-Koch, MIT, 131c1f5. https://github.com/oliveradk/openai-character-training
+
+A port of OCT's data pipeline to the OpenAI API. It fixes OCT's self-interaction guidance template and adds a hidden-objective option.
+
+## Pushback and sycophancy
+
+**Are You Sure? Challenging LLMs Leads to Performance Drops in The FlipFlop Experiment**, Laban et al., 2023. https://arxiv.org/abs/2311.08596
+
+Challenge a model's answer with "Are you sure?" and it often flips. Their models flipped 46% of the time on average and lost 17% accuracy. Synthetic fine-tuning reduced the drop but did not remove it. Our pushback environment adds evidence probes, so refusing ever to update cannot score well, and judges character on every reply.
+
+**Towards Understanding Sycophancy in Language Models**, Sharma et al., 2023. https://arxiv.org/abs/2310.13548
+
+Assistants trained on human feedback often match the user's stated beliefs over the truth, and preference data partly rewards this. This is a reason to measure evidence-free capitulation directly rather than assume a character prompt prevents it.
+
 ## Drift, consistency and judge calibration
 
 **Examining Identity Drift in Conversations of LLM Agents**, 2024. https://arxiv.org/abs/2412.00804
