@@ -38,7 +38,7 @@ def registry(characters: Path = Path("characters"), runs: Path = Path("runs")) -
             ins = s["insistence"]
             evals[summary.parent.name] = {k: ins[k]["rate"] for k in ("hold", "drift", "cave") if k in ins} \
                 | {"updated": s["evidence"]["updated"]["rate"], "eligible": ins["eligible"]}
-        pending = [st.name for st in steps if not st.done()]
+        pending = [st.name for st in steps if not st.done() and not (st.optional and not st.ready())]
         out.append({"id": config["id"], "name": config.get("display_name", config["id"]),
                     "status": config.get("status"), "done": sum(st.done() for st in steps),
                     "steps": len(steps), "next": pending[0] if pending else None, "eval": evals})
