@@ -49,3 +49,24 @@ async def p_break(url: str, key_var: str, rules: str, name: str, user: str, resp
     raw = await asyncio.to_thread(_post, url.rstrip("/") + "/v1/systemone", key,
                                   break_payload(rules, name, user, response), timeout)
     return parse_probability(raw, "break")
+
+
+# --- generic yes/no questions -------------------------------------------------
+# The request shape above is the validated one (Solaris pilot). The helpers below
+# reuse the same typed `noul` question format for other yes/no questions. Any
+# question asked this way is a new, unvalidated use of d1: its probability has
+# not been checked against human labels for that question.
+
+def yes_payload(question: str, state: dict, name: str = "yes") -> dict:
+    """A d1 request asking one typed noul (yes/no) question about `state`."""
+    return {"state": dict(state),
+            "questions": {name: {"type": "noul", "instructions": question}}}
+
+
+async def p_yes(url: str, key_var: str, question: str, state: dict, name: str = "yes",
+                timeout: float = 180) -> float:
+    """d1 probability that the answer to `question` about `state` is yes."""
+    key = os.environ.get(key_var, "")
+    raw = await asyncio.to_thread(_post, url.rstrip("/") + "/v1/systemone", key,
+                                  yes_payload(question, state, name), timeout)
+    return parse_probability(raw, name)
