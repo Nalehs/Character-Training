@@ -14,5 +14,10 @@
   "sft": {
     "seq_len": 2048
   },
-  "note": "We have not confirmed a Qwen3.5-27B Base release. If only the post-trained model exists, a 27B arm starts from an instruct model, like Open Character Training; record that as a deviation."
+  "note": "We have not confirmed a Qwen3.5-27B Base release. If only the post-trained model exists, a 27B arm starts from an instruct model, like Open Character Training; record that as a deviation.",
+  "instruct": {
+    "hf": "Qwen/Qwen3.5-27B",
+    "revision": null,
+    "note": "the post-trained 27B; if no Base exists this is also the student"
+  }
 }

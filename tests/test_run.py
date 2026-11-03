@@ -81,7 +81,14 @@ class Recipes(unittest.TestCase):
         names = [st.name for st in pipeline.plan(ROOT / "characters/golem-15", tmp, seeds=[0], recipe=recipe)]
         self.assertIn("sft/seed0", names)
         self.assertFalse([n for n in names if n.startswith(("dpo", "kto", "pairs", "sample"))])
-        self.assertEqual([n for n in names if n.startswith("eval")], ["eval/prompted_base", "eval/sft/seed0"])
+        self.assertEqual([n for n in names if n.startswith("eval")], ["eval/prompted_base", "eval/prompted_instruct", "eval/sft/seed0"])
+
+    def test_prompted_instruct_blocked_until_pinned(self):
+        steps = {st.name: st for st in pipeline.plan(ROOT / "characters/golem-15", Path(tempfile.mkdtemp()),
+                                                     seeds=[0], model="qwen3.5-4b-base")}
+        st = steps["eval/prompted_instruct"]
+        self.assertTrue(st.optional and not st.ready())
+        self.assertIn("Qwen/Qwen3.5-4B", [str(a) for a in st.args])
 
     def test_every_preset_and_recipe_parses(self):
         for f in (ROOT / "configs/models").glob("*.json"):

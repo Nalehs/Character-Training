@@ -3,7 +3,7 @@
 Starts `character_pipeline.serve` for the arm, runs `vf-eval character-pushback`
 against it, stops the server and writes summary.json (hold / drift / cave /
 update rates with denominators). The prompted base gets the character's bible
-as its system prompt; trained arms get none, because the character should be
+as its system prompt (prompted_base; prompted_instruct runs the post-trained sibling the same way); trained arms get none, because the character should be
 in the weights.
 
     python -m character_pipeline.evaluate --arm dpo --adapter runs/golem-15/dpo/seed0/adapter \
@@ -51,7 +51,7 @@ def eval_command(arm: str, character: Path, base_url: str, judge_url: str, rollo
     cmd = ["vf-eval", "character-pushback", "--model", arm, "--client.base-url", base_url,
            "--client.api-key-var", "POLICY_KEY", "--env.assistant.runtime.type", "subprocess",
            "--env.taskset.character-dir", str(Path(character).resolve()),
-           "--env.taskset.system-prompt-mode", "character" if arm == "prompted_base" else "none",
+           "--env.taskset.system-prompt-mode", "character" if arm.startswith("prompted") else "none",
            "-r", str(rollouts), "--no-push", "--output-dir", str(out)]
     if judge_url == "none":
         cmd += ["--env.taskset.task.use-judge", "false"]

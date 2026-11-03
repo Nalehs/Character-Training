@@ -14,5 +14,10 @@
   "sft": {
     "seq_len": 2048
   },
-  "note": "The '8B' rung of the scale ladder: Qwen3.5 ships 9B, not 8B. Pin a revision before training."
+  "note": "The '8B' rung of the scale ladder: Qwen3.5 ships 9B, not 8B. Pin a revision before training.",
+  "instruct": {
+    "hf": "Qwen/Qwen3.5-9B",
+    "revision": null,
+    "note": "post-trained sibling for the prompted_instruct control (Zero's headline comparison); pin a revision to enable it"
+  }
 }

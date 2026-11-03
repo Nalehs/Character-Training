@@ -17,5 +17,10 @@
   },
   "sft": {
     "seq_len": 512
+  },
+  "instruct": {
+    "hf": "Qwen/Qwen3.5-0.8B",
+    "revision": null,
+    "note": "post-trained sibling for the prompted_instruct control (Zero's headline comparison); pin a revision to enable it"
   }
 }

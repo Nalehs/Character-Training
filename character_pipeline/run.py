@@ -44,12 +44,13 @@ class Step:
     needs: list[Path] = field(default_factory=list)
     human: str | None = None      # what a person must produce if `needs` is missing
     optional: bool = False        # skip (not stop) when `needs` is missing
+    blocked: str | None = None    # a reason this step cannot run yet that is not a missing file
 
     def done(self) -> bool:
         return all(p.exists() for p in self.outputs)
 
     def ready(self) -> bool:
-        return all(p.exists() for p in self.needs)
+        return self.blocked is None and all(p.exists() for p in self.needs)
 
     def command(self) -> str:
         return " ".join(["python -m", self.module, *map(str, self.args)])
@@ -89,6 +90,7 @@ def settings(character_dir: Path, recipe: Path | None = None, model: str | None 
     if model:
         preset = model_preset(model)
         merged.update(model=preset["hf"], revision=preset["revision"], model_preset=model)
+        merged["instruct"] = preset.get("instruct")
         merged["lora"] = preset.get("lora", merged["lora"])
         if "sft" in preset:
             merged["sft"] = _merge(merged["sft"], preset["sft"])
@@ -183,6 +185,14 @@ def plan(character_dir: Path, runs_root: Path = Path("runs"), device: str = "cud
           *(["--limit", s["eval"]["limit"]] if s["eval"].get("limit") else []), *model]
     steps.append(Step("eval/prompted_base", m + "evaluate", ["--arm", "prompted_base", "--out", R / "eval" / "prompted_base", *ev],
                       [R / "eval" / "prompted_base" / "summary.json"]))
+    inst = s.get("instruct") or {}
+    steps.append(Step("eval/prompted_instruct", m + "evaluate",
+                      ["--arm", "prompted_instruct", "--out", R / "eval" / "prompted_instruct", *ev,
+                       "--model", inst.get("hf", ""), "--revision", inst.get("revision") or ""],
+                      [R / "eval" / "prompted_instruct" / "summary.json"],
+                      human="pin the instruct sibling's revision in the model preset (configs/models) to run "
+                            "the prompted-instruct control, Zero's headline comparison", optional=True,
+                      blocked=None if inst.get("revision") else "instruct sibling not pinned"))
     for seed in seeds:
         for arm in [a for a in ARMS if a in keep]:
             adapter = R / arm / f"seed{seed}" / "adapter"
@@ -205,7 +215,7 @@ def execute(steps: list[Step], only: str | None = None, until: str | None = None
             if step.optional:
                 log(f"[skip]    {step.name}: {step.human or 'input missing'}")
                 continue
-            missing = ", ".join(str(p) for p in step.needs if not p.exists())
+            missing = step.blocked or ", ".join(str(p) for p in step.needs if not p.exists())
             log(f"[waiting] {step.name}: missing {missing}")
             if step.human:
                 log(f"          → {step.human}")
