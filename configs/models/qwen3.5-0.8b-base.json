@@ -1,0 +1,21 @@
+{
+  "id": "qwen3.5-0.8b-base",
+  "hf": "Qwen/Qwen3.5-0.8B-Base",
+  "revision": "dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68",
+  "params_b": 0.8,
+  "layers": 24,
+  "status": "run",
+  "used_in": [
+    "Aineko run 1 SFT (evidence/aineko-run1-oct)",
+    "Computer-11 (evidence/computer-11)",
+    "persona-vector pilot (evidence/persona-vector-pilot)"
+  ],
+  "hardware": "CPU is enough: Aineko trained it on 3 cores and ~5.8 GiB RAM (aineko-character-training README)",
+  "lora": {
+    "rank": 16,
+    "alpha": 32
+  },
+  "sft": {
+    "seq_len": 512
+  }
+}

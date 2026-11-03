@@ -1,0 +1,18 @@
+{
+  "id": "qwen3.5-9b-base",
+  "hf": "Qwen/Qwen3.5-9B-Base",
+  "revision": null,
+  "params_b": 9,
+  "layers": 32,
+  "status": "unpinned",
+  "used_in": [],
+  "hardware": "not measured. bf16 weights alone are about 18 GB; plan a 40 GB+ GPU for LoRA",
+  "lora": {
+    "rank": 16,
+    "alpha": 32
+  },
+  "sft": {
+    "seq_len": 2048
+  },
+  "note": "The '8B' rung of the scale ladder: Qwen3.5 ships 9B, not 8B. Pin a revision before training."
+}
