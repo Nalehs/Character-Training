@@ -94,11 +94,18 @@ def main(argv=None):
     ap.add_argument("--repeats", type=int, default=1, help="OCT uses K = 5")
     ap.add_argument("--no-additional", action="store_true", help="ignore additional_questions")
     ap.add_argument("--oct-out", type=Path, help="also write the bare OCT list (for OCT's own scripts)")
+    ap.add_argument("--scenarios-out", type=Path,
+                    help="also write one-turn scenarios for generate.teacher (OCT stage 3, teacher replies)")
     args = ap.parse_args(argv)
     traits = read_constitution(args.constitution)
     rows = prompt_rows(traits, args.repeats, not args.no_additional)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
+    if args.scenarios_out:
+        args.scenarios_out.parent.mkdir(parents=True, exist_ok=True)
+        args.scenarios_out.write_text("".join(json.dumps(
+            {"id": f'{r["id"]}:k{n}', "caller_turns": [r["messages"][0]["content"]], "trait": r["trait"]},
+            ensure_ascii=False) + "\n" for n, r in enumerate(rows)))
     if args.oct_out:
         bare = [{"trait": t["trait"], "questions": t["questions"]} for t in traits]
         args.oct_out.write_text(json.dumps(bare, indent=4, ensure_ascii=False) + "\n")
