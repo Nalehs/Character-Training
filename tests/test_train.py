@@ -1,5 +1,7 @@
 """Pure training helpers; no torch needed. The GPU path is exercised by
 scripts/train_smoke.py when torch is installed."""
+import contextlib
+import io
 import math
 import re
 import unittest
@@ -103,7 +105,7 @@ class SftFlags(unittest.TestCase):
         self.assertIsNone(a.merge_adapter)
 
     def test_merge_and_init_adapter_are_exclusive(self):
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             sft_module.parse(self.BASE + ["--merge-adapter", "a", "--init-adapter", "b"])
 
 
