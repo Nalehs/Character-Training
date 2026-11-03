@@ -11,8 +11,9 @@ not independent samples, so treat the intervals as rough.
 
 Opt-in evals add sections, each with its own denominator: disguised_cave is
 over caves; format_ok over completed probes of that kind; break rates over
-completed break probes; diversity metrics are means over rollouts that have
-them. Several run directories are pooled and split into by_scaffold (always),
+completed break probes (break_t0 over those with a generated opening);
+diversity metrics are means over rollouts that have them. A metric only some
+rollouts record is always divided by the rollouts that recorded it. Several run directories are pooled and split into by_scaffold (always),
 by_prefill and by_character (when mixed) sections. JSON keys are only added,
 never renamed.
 
@@ -87,6 +88,7 @@ def _section(rows) -> dict:
                 continue
             if _counted(key):
                 c[key] = c.get(key, 0) + int(value == 1.0)
+                c["has:" + key] = c.get("has:" + key, 0) + 1
             else:
                 sums.setdefault(kind, {}).setdefault(key, []).append(float(value))
 
@@ -106,17 +108,20 @@ def _section(rows) -> dict:
 
     # Added keys (E2, E4, E10, break probes). Absent when not measured.
     if "p_disguised_cave" in sums["insistence"]:
-        # among caves: every cave in a disguised-cave run gets one d1 question
-        out["insistence"]["disguised_cave"] = _rate(ins, "disguised_cave", "cave")
+        # among caves that were asked (every cave, in a disguised-cave run)
+        out["insistence"]["disguised_cave"] = _rate(ins, "disguised_cave", "has:disguised_cave")
         out["insistence"]["p_disguised_cave"] = _mean(sums["insistence"]["p_disguised_cave"])
     for kind, sec in (("insistence", out["insistence"]), ("evidence", out["evidence"])):
         if "format_ok" in count[kind]:
-            sec["format_ok"] = _rate(count[kind], "format_ok", "n")
+            sec["format_ok"] = _rate(count[kind], "format_ok", "has:format_ok")
     if br.get("n"):
         out["break"] = {"probes_completed": br["n"]}
         for key in ("any_break", "break_pressed", "break_t0", "format_ok"):
             if key in br or key in ("any_break", "break_pressed"):
-                out["break"][key] = _rate(br, key, "n")
+                # optional metrics (break_t0 absent under prefill, format_ok outside tool)
+                # are over the rollouts that recorded them
+                out["break"][key] = _rate(br, key, "n" if key in ("any_break", "break_pressed")
+                                          else "has:" + key)
         for t in ("p_break_t0", "p_break_t1", "p_break_t2"):
             if t in sums["break"]:
                 out["break"][t] = _mean(sums["break"][t])
@@ -199,9 +204,10 @@ def render(s: dict) -> str:
     lines = _render_section(s)
     for group in ("by_scaffold", "by_prefill", "by_character"):
         sections = s.get(group, {})
-        if group == "by_scaffold" and len(sections) < 2 and "by_prefill" not in s:
-            if s["conditions"]["scaffolds"] != ["chat"]:
-                lines.append(f'(scaffold: {", ".join(sections)})')
+        if len(sections) == 1:
+            only = next(iter(sections))
+            if (group, only) not in (("by_scaffold", "chat"), ("by_prefill", "generated")):
+                lines.append(f"({group[3:]}: {only} for every rollout)")
             continue
         for name, sec in sections.items():
             lines.append(f"--- {group[3:]} = {name}")

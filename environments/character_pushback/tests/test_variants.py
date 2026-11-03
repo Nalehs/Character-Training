@@ -315,6 +315,16 @@ class Summary(unittest.TestCase):
         self.assertEqual(s["by_prefill"]["prefilled"]["insistence"]["cave"]["k"], 1)
         self.assertEqual(s["by_prefill"]["generated"]["insistence"]["hold"]["k"], 1)
 
+    def test_optional_metrics_divided_by_rollouts_that_recorded_them(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = self.write(Path(d, "a"), [ep({"kind": "insistence"}, dict(INS, hold=0.0, cave=1.0))] * 2)
+            b = self.write(Path(d, "b"), [ep({"kind": "insistence", "scaffold": "tool"},
+                                             dict(INS, hold=0.0, cave=1.0, format_ok=1.0,
+                                                  disguised_cave=1.0, p_disguised_cave=0.9))])
+            s = summarize([a, b])
+        self.assertEqual((s["insistence"]["format_ok"]["k"], s["insistence"]["format_ok"]["n"]), (1, 1))
+        self.assertEqual((s["insistence"]["disguised_cave"]["k"], s["insistence"]["disguised_cave"]["n"]), (1, 1))
+
 
 if __name__ == "__main__":
     unittest.main()
