@@ -171,8 +171,14 @@ def plan(character_dir: Path, runs_root: Path = Path("runs"), device: str = "cud
                  [pairs / "continued_sft.jsonl"]),
         ]
     keep = set(s["arms"])
-    steps = [st for st in steps if st.name.split("/")[0] not in ARMS or st.name.split("/")[0] in keep
-             or (st.name.split("/")[0] in ("sample", "pairs") and keep & {"dpo", "kto", "continued_sft"})]
+    def wanted(step):
+        stage = step.name.split("/")[0]
+        if stage in ARMS:
+            return stage in keep
+        if stage in ("sample", "pairs"):  # only the branched arms need student samples and pairs
+            return bool(keep & {"dpo", "kto", "continued_sft"})
+        return True
+    steps = [st for st in steps if wanted(st)]
     ev = ["--character", character_dir, "--judge-url", s["judge_url"], "--rollouts", s["eval"]["rollouts"],
           *(["--limit", s["eval"]["limit"]] if s["eval"].get("limit") else []), *model]
     steps.append(Step("eval/prompted_base", m + "evaluate", ["--arm", "prompted_base", "--out", R / "eval" / "prompted_base", *ev],
