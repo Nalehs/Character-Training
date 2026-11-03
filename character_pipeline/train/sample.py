@@ -49,7 +49,9 @@ def load_policy(model_id, revision, adapter, device, local_files_only=False):
     return tok, model
 
 
-def generate(tok, model, messages, max_new_tokens, temperature, top_p, device):
+def generate(tok, model, messages, max_new_tokens, temperature, top_p, device, **sampling):
+    """One sampled reply. Extra `sampling` kwargs (e.g. top_k, repetition_penalty) go to
+    model.generate unchanged; none are passed by this module's own sampling."""
     import torch
     ids = tok.apply_chat_template(messages, tokenize=True, add_generation_prompt=True, enable_thinking=False)
     ids = ids["input_ids"] if hasattr(ids, "keys") else ids
@@ -58,7 +60,7 @@ def generate(tok, model, messages, max_new_tokens, temperature, top_p, device):
     with torch.inference_mode():
         y = model.generate(input_ids=x, attention_mask=torch.ones_like(x), max_new_tokens=max_new_tokens,
                            do_sample=temperature > 0, temperature=temperature or None, top_p=top_p,
-                           eos_token_id=eos, pad_token_id=tok.pad_token_id)
+                           eos_token_id=eos, pad_token_id=tok.pad_token_id, **sampling)
     new = y[0, x.shape[1]:].tolist()
     finish = "eos" if new and new[-1] == eos else "length"
     return tok.decode(new, skip_special_tokens=True).strip(), finish

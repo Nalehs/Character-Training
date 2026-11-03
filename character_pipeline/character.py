@@ -5,6 +5,10 @@ system prompt for teacher generation and for prompted baselines is the bible,
 optionally followed by `core.md` and `style.md` when those exist locally. Those
 two files are gitignored for Golem: the full core and style stay private and
 only the short public excerpt in BIBLE.md is published.
+
+An optional `constitution.json` (Open Character Training's format: about 10
+first-person traits with 5 seed prompts each; see data/constitution.py) is an
+interop file for running OCT's stages on a character. It is not read here.
 """
 from __future__ import annotations
 
