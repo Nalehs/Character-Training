@@ -6,6 +6,9 @@ sample on the identical prompt prefix, so the pair tests what the student
 would actually say. Student samples come from the shared SFT checkpoint
 (sample them with any server; the file just needs prompt ids).
 
+It also writes continued_sft.jsonl: the same prompts with the chosen side as
+plain SFT chats, so the continued-SFT control sees exactly DPO's chosen tokens.
+
 KTO needs absolute labels, collected independently: a reviewer marks each
 completion desirable or undesirable. A DPO "rejected" side is never turned
 into a KTO negative automatically (RECIPE.md; Ethayarajh et al. 2024).
@@ -68,8 +71,9 @@ def main(argv=None):
     labels = ({(r["id"], r["source"]): bool(r["label"]) for r in read(args.kto_labels)}
               if args.kto_labels else None)
     dpo, kto, skipped = build(read(args.chats), samples, labels)
-    args.out.mkdir(parents=True, exist_ok=False)
-    for name, rows in (("dpo_train", dpo), ("kto_train", kto)):
+    args.out.mkdir(parents=True, exist_ok=True)
+    continued = [{"id": r["id"], "messages": r["prompt"] + r["chosen"]} for r in dpo]
+    for name, rows in (("dpo_train", dpo), ("kto_train", kto), ("continued_sft", continued)):
         if rows:
             (args.out / f"{name}.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
     (args.out / "manifest.json").write_text(json.dumps({"dpo": len(dpo), "kto": len(kto), "skipped": skipped}, indent=2) + "\n")
