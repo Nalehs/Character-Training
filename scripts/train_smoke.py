@@ -35,6 +35,8 @@ def tiny_model(path: Path) -> None:
                                   additional_special_tokens=["<|im_start|>", "<|im_end|>", "<|endoftext|>"])
     tok.chat_template = CHATML
     tok.save_pretrained(path)
+    cfg_file = path / "tokenizer_config.json"  # see train/common.py load_student
+    cfg_file.write_text(json.dumps(json.loads(cfg_file.read_text()) | {"tokenizer_class": "PreTrainedTokenizerFast"}))
     cfg = Qwen2Config(vocab_size=len(tok), hidden_size=32, intermediate_size=64, num_hidden_layers=2,
                       num_attention_heads=4, num_key_value_heads=2, max_position_embeddings=256,
                       tie_word_embeddings=True)
@@ -51,10 +53,6 @@ def chat(i):
 
 
 def main():
-    import transformers
-    # The tiny model is a qwen2 config, and AutoTokenizer would swap in Qwen2's BPE class
-    # for our word-level tokenizer. Load the generic fast class instead (test shim only).
-    transformers.AutoTokenizer.from_pretrained = transformers.PreTrainedTokenizerFast.from_pretrained
     from character_pipeline.data.pairs import build
     from character_pipeline.train import preference, sft
     with tempfile.TemporaryDirectory() as d:

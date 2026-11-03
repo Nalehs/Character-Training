@@ -116,6 +116,10 @@ def load_student(model_id: str = STUDENT, revision: str | None = STUDENT_REVISIO
     dtype, _ = precision(device)
     tok = transformers.AutoTokenizer.from_pretrained(model_id, revision=revision,
                                                      local_files_only=local_files_only)
+    config_file = Path(model_id) / "tokenizer_config.json"
+    if config_file.is_file() and json.loads(config_file.read_text()).get("tokenizer_class") == "PreTrainedTokenizerFast":
+        # A local test tokenizer that AutoTokenizer would otherwise swap for the model family's class.
+        tok = transformers.PreTrainedTokenizerFast.from_pretrained(model_id)
     if tok.pad_token_id is None:
         tok.pad_token = tok.eos_token
     model_type = transformers.AutoConfig.from_pretrained(
