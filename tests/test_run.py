@@ -61,6 +61,37 @@ class Plan(unittest.TestCase):
         self.assertEqual(rows[0]["p_break"], 0.2)
 
 
+class Recipes(unittest.TestCase):
+    def test_unpinned_preset_refused_unless_allowed(self):
+        with self.assertRaises(SystemExit):
+            pipeline.settings(ROOT / "characters/golem-15", model="qwen3.5-9b-base")
+        s = pipeline.settings(ROOT / "characters/golem-15", model="qwen3.5-9b-base", allow_unpinned=True)
+        self.assertEqual((s["revision"], s["unpinned"]), ("main", True))
+
+    def test_preset_sets_model_and_lengths(self):
+        s = pipeline.settings(ROOT / "characters/golem-15", model="qwen3.5-0.8b-base")
+        self.assertEqual(s["model"], "Qwen/Qwen3.5-0.8B-Base")
+        self.assertEqual(s["sft"]["seq_len"], 512)
+        self.assertEqual(s["recipe"], "character-pipeline-v0")
+
+    def test_recipe_arms_filter_plan(self):
+        tmp = Path(tempfile.mkdtemp())
+        recipe = tmp / "r.json"
+        recipe.write_text(json.dumps({"name": "sft-only", "arms": ["sft"]}))
+        names = [st.name for st in pipeline.plan(ROOT / "characters/golem-15", tmp, seeds=[0], recipe=recipe)]
+        self.assertIn("sft/seed0", names)
+        self.assertFalse([n for n in names if n.startswith(("dpo", "kto", "pairs", "sample"))])
+        self.assertEqual([n for n in names if n.startswith("eval")], ["eval/prompted_base", "eval/sft/seed0"])
+
+    def test_every_preset_and_recipe_parses(self):
+        for f in (ROOT / "configs/models").glob("*.json"):
+            m = json.loads(f.read_text())
+            self.assertEqual(m["id"], f.stem)
+            self.assertEqual(m["status"] == "unpinned", m["revision"] is None)
+        for f in (ROOT / "recipes").glob("*.json"):
+            self.assertIn("name", json.loads(f.read_text()))
+
+
 class Cli(unittest.TestCase):
     def test_new_character_from_template(self):
         tmp = Path(tempfile.mkdtemp())

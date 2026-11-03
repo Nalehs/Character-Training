@@ -55,25 +55,64 @@ class Step:
         return " ".join(["python -m", self.module, *map(str, self.args)])
 
 
-def settings(character_dir: Path) -> dict:
-    config = json.loads((character_dir / "config.json").read_text())
-    merged = {k: (dict(v) if isinstance(v, dict) else v) for k, v in DEFAULTS.items()}
-    for key, value in config.get("pipeline", {}).items():
-        merged[key] = merged[key] | value if isinstance(merged.get(key), dict) else value
+REPO = Path(__file__).resolve().parents[1]
+DEFAULT_RECIPE = REPO / "recipes" / "character-pipeline-v0.json"
+MODELS = REPO / "configs" / "models"
+
+
+def _merge(base: dict, over: dict) -> dict:
+    out = dict(base)
+    for key, value in over.items():
+        out[key] = _merge(out[key], value) if isinstance(out.get(key), dict) and isinstance(value, dict) else value
+    return out
+
+
+def model_preset(name: str) -> dict:
+    path = MODELS / f"{name}.json"
+    if not path.is_file():
+        raise SystemExit(f"unknown model preset {name!r}; see {MODELS}")
+    return json.loads(path.read_text())
+
+
+def settings(character_dir: Path, recipe: Path | None = None, model: str | None = None,
+             allow_unpinned: bool = False) -> dict:
+    """DEFAULTS < recipe < character config "pipeline" < character "student" < --model preset."""
+    config = json.loads((Path(character_dir) / "config.json").read_text())
+    recipe_path = Path(recipe) if recipe else DEFAULT_RECIPE
+    recipe_data = json.loads(recipe_path.read_text()) if recipe_path.is_file() else {}
+    merged = _merge(DEFAULTS, recipe_data.get("pipeline", {}))
+    merged = _merge(merged, config.get("pipeline", {}))
     student = config.get("student", {})
-    merged.setdefault("model", student.get("model", STUDENT))
-    merged.setdefault("revision", student.get("revision", STUDENT_REVISION))
+    merged["model"] = student.get("model", STUDENT)
+    merged["revision"] = student.get("revision", STUDENT_REVISION)
+    merged.setdefault("lora", {"rank": 16, "alpha": 32})
+    if model:
+        preset = model_preset(model)
+        merged.update(model=preset["hf"], revision=preset["revision"], model_preset=model)
+        merged["lora"] = preset.get("lora", merged["lora"])
+        if "sft" in preset:
+            merged["sft"] = _merge(merged["sft"], preset["sft"])
+        if preset["revision"] is None:
+            if not allow_unpinned:
+                raise SystemExit(f"{model} has no pinned revision ({preset.get('note', '')}). Pin one in "
+                                 f"{MODELS / (model + '.json')} or pass --allow-unpinned to train on 'main'.")
+            merged["revision"] = "main"
+            merged["unpinned"] = True
+    merged["arms"] = recipe_data.get("arms", list(ARMS))
+    merged["recipe"] = recipe_data.get("name", "defaults")
     merged["id"] = config["id"]
     return merged
 
 
 def plan(character_dir: Path, runs_root: Path = Path("runs"), device: str = "cuda:0",
-         seeds: list[int] | None = None, extra: list[str] | None = None) -> list[Step]:
+         seeds: list[int] | None = None, extra: list[str] | None = None, recipe: Path | None = None,
+         model: str | None = None, allow_unpinned: bool = False) -> list[Step]:
     character_dir = Path(character_dir)
-    s = settings(character_dir)
+    s = settings(character_dir, recipe, model, allow_unpinned)
     R = Path(runs_root) / s["id"]
     seeds = s["seeds"] if seeds is None else seeds
     model = ["--model", s["model"], "--revision", s["revision"], "--device", device, *(extra or [])]
+    lora = ["--rank", s["lora"]["rank"], "--alpha", s["lora"]["alpha"]]
     m = "character_pipeline."
     steps = [
         Step("generate", m + "generate.teacher",
@@ -100,7 +139,7 @@ def plan(character_dir: Path, runs_root: Path = Path("runs"), device: str = "cud
             Step(f"sft/seed{seed}", m + "train.sft",
                  ["--train", clean / "train.jsonl", "--validation", clean / "validation.jsonl", "--out", sft,
                   "--seed", seed, "--epochs", s["sft"]["epochs"], "--lr", s["sft"]["lr"],
-                  "--seq-len", s["sft"]["seq_len"], *model],
+                  "--seq-len", s["sft"]["seq_len"], *lora, *model],
                  [sft / "adapter" / "adapter_config.json"], [clean / "train.jsonl"]),
             Step(f"sample/seed{seed}", m + "train.sample",
                  ["--adapter", sft / "adapter", "--chats", clean / "train.jsonl",
@@ -113,13 +152,13 @@ def plan(character_dir: Path, runs_root: Path = Path("runs"), device: str = "cud
             Step(f"dpo/seed{seed}", m + "train.preference",
                  ["dpo", "--sft-adapter", sft / "adapter", "--data", pairs / "dpo_train.jsonl",
                   "--out", R / "dpo" / f"seed{seed}", "--seed", seed, "--lr", s["preference"]["lr"],
-                  "--beta", s["preference"]["beta"], "--max-length", s["preference"]["max_length"], *model],
+                  "--beta", s["preference"]["beta"], "--max-length", s["preference"]["max_length"], *lora, *model],
                  [R / "dpo" / f"seed{seed}" / "adapter" / "adapter_config.json"], [pairs / "dpo_train.jsonl"]),
             Step(f"kto/seed{seed}", m + "train.preference",
                  ["kto", "--sft-adapter", sft / "adapter", "--data", pairs / "kto_train.jsonl",
                   "--out", R / "kto" / f"seed{seed}", "--seed", seed, "--lr", s["preference"]["lr"],
                   "--beta", s["preference"]["beta"], "--max-length", s["preference"]["max_length"],
-                  "--batch-size", 2, *model],
+                  "--batch-size", 2, *lora, *model],
                  [R / "kto" / f"seed{seed}" / "adapter" / "adapter_config.json"], [pairs / "kto_train.jsonl"],
                  human=f"optional: absolute good/bad labels in {kto_labels}, then delete {pairs} and re-run",
                  optional=True),
@@ -131,12 +170,15 @@ def plan(character_dir: Path, runs_root: Path = Path("runs"), device: str = "cud
                  [R / "continued_sft" / f"seed{seed}" / "adapter" / "adapter_config.json"],
                  [pairs / "continued_sft.jsonl"]),
         ]
+    keep = set(s["arms"])
+    steps = [st for st in steps if st.name.split("/")[0] not in ARMS or st.name.split("/")[0] in keep
+             or (st.name.split("/")[0] in ("sample", "pairs") and keep & {"dpo", "kto", "continued_sft"})]
     ev = ["--character", character_dir, "--judge-url", s["judge_url"], "--rollouts", s["eval"]["rollouts"],
           *(["--limit", s["eval"]["limit"]] if s["eval"].get("limit") else []), *model]
     steps.append(Step("eval/prompted_base", m + "evaluate", ["--arm", "prompted_base", "--out", R / "eval" / "prompted_base", *ev],
                       [R / "eval" / "prompted_base" / "summary.json"]))
     for seed in seeds:
-        for arm in ARMS:
+        for arm in [a for a in ARMS if a in keep]:
             adapter = R / arm / f"seed{seed}" / "adapter"
             out = R / "eval" / f"{arm}-seed{seed}"
             steps.append(Step(f"eval/{arm}/seed{seed}", m + "evaluate",
@@ -189,3 +231,13 @@ def review_sheet(judged: Path, out: Path) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
     return len(rows)
+
+
+def resolved(character_dir: Path, runs_root: Path, recipe: Path | None = None, model: str | None = None,
+             allow_unpinned: bool = False) -> Path:
+    """Write the fully merged settings next to the run, so every run records exactly what it used."""
+    s = settings(character_dir, recipe, model, allow_unpinned)
+    out = Path(runs_root) / s["id"] / "resolved_recipe.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(s, indent=2) + "\n")
+    return out

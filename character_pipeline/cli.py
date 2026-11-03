@@ -3,6 +3,8 @@
     character-pipeline new   <id> --name "NAME"     scaffold characters/<id> from the template
     character-pipeline status [<character> ...]     what is done, what is next, eval rates
     character-pipeline run   <character> [...]      run every pending step, resumably
+                             --model qwen3.5-4b-base   --recipe recipes/<name>.json
+    character-pipeline models | recipes             list model-scale presets and recipes
     character-pipeline review-sheet <character>     write the human review template
     character-pipeline ecology [--cross-judge]      all characters side by side
     character-pipeline <stage> [args]               run one stage directly:
@@ -80,8 +82,13 @@ def main(argv=None):
     p = sub.add_parser("status")
     p.add_argument("character", nargs="*")
     p.add_argument("--json", action="store_true")
+    p = sub.add_parser("models", help="list model-scale presets")
+    p = sub.add_parser("recipes", help="list recipe files")
     p = sub.add_parser("run")
     p.add_argument("character", type=Path)
+    p.add_argument("--recipe", type=Path, help="recipes/<name>.json (default: character-pipeline-v0)")
+    p.add_argument("--model", help="model preset from configs/models, e.g. qwen3.5-4b-base")
+    p.add_argument("--allow-unpinned", action="store_true", help="train a preset with no pinned revision on 'main'")
     p.add_argument("--only", help="run only steps whose name starts with this, e.g. sft or eval")
     p.add_argument("--until", help="stop after the first step whose name starts with this")
     p.add_argument("--seeds", type=int, nargs="+")
@@ -100,9 +107,21 @@ def main(argv=None):
         new(args)
     elif args.cmd == "status":
         status(args)
+    elif args.cmd == "models":
+        for f in sorted(pipeline.MODELS.glob("*.json")):
+            m = json.loads(f.read_text())
+            print(f'{m["id"]:<22}{m["hf"]:<26}{m["status"]:<10}{(m["revision"] or "UNPINNED")[:12]:<14}{m["hardware"]}')
+    elif args.cmd == "recipes":
+        for f in sorted((pipeline.REPO / "recipes").glob("*.json")):
+            r = json.loads(f.read_text())
+            print(f'{r["name"]:<26}{r.get("status", "")}\n    {r.get("summary", "")}\n    cite: {r.get("cite", "")}')
     elif args.cmd == "run":
         steps = pipeline.plan(args.character, Path(args.runs), args.device, args.seeds,
-                              ["--local-files-only"] if args.local_files_only else None)
+                              ["--local-files-only"] if args.local_files_only else None,
+                              args.recipe, args.model, args.allow_unpinned)
+        if not args.dry_run:
+            print("settings:", pipeline.resolved(args.character, Path(args.runs), args.recipe, args.model,
+                                                 args.allow_unpinned))
         result = pipeline.execute(steps, args.only, args.until, args.dry_run)
         print(result)
         if result.startswith("stopped"):
