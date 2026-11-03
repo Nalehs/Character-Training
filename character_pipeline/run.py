@@ -45,6 +45,7 @@ class Step:
     human: str | None = None      # what a person must produce if `needs` is missing
     optional: bool = False        # skip (not stop) when `needs` is missing
     blocked: str | None = None    # a reason this step cannot run yet that is not a missing file
+    marker: Path | None = None    # written after success, for steps whose outputs are directories
 
     def done(self) -> bool:
         return all(p.exists() for p in self.outputs)
@@ -106,11 +107,74 @@ def settings(character_dir: Path, recipe: Path | None = None, model: str | None 
     return merged
 
 
+TAKES_MODEL = {"train.sft", "train.sample", "train.preference", "train.merge", "generate.introspection", "evaluate"}
+
+
+def plan_staged(character_dir: Path, recipe_data: dict, s: dict, runs_root: Path, device: str,
+                seeds: list[int], extra: list[str]) -> list[Step]:
+    """Steps from a recipe that lists its own stages as templated commands (e.g. recipes/oct-2025.json).
+
+    Templates: {runs} {character} {seed} {teacher_url} {judge_url}; "characters/{character}" means this
+    character's folder. Stages that mention {seed} run once per seed, after the shared stages. A stage
+    whose --out is a directory is marked done by "<out>.done", written only after it succeeds.
+    """
+    R = Path(runs_root) / s["id"]
+
+    def fill(arg, seed=None):
+        text = str(arg).replace("characters/{character}", str(character_dir))
+        text = text.replace("{runs}", str(runs_root)).replace("{character}", s["id"])
+        text = text.replace("{teacher_url}", s["teacher_url"]).replace("{judge_url}", s["judge_url"])
+        return text.replace("{seed}", str(seed)) if seed is not None else text
+
+    model = ["--model", s["model"], "--revision", s["revision"], "--device", device, *extra]
+    stages = [st for st in recipe_data["stages"] if st.get("module")]
+    shared = [st for st in stages if "{seed}" not in json.dumps(st["args"])]
+    seeded = [st for st in stages if st not in shared]
+    out = []
+
+    def step(stage, seed=None):
+        args = [fill(a, seed) for a in stage["args"]]
+        target = Path(args[args.index("--out") + 1]) if "--out" in args else None
+        short = stage["module"].removeprefix("character_pipeline.")
+        name = stage["id"] + (f"/seed{seed}" if seed is not None else "")
+        marker = Path(str(target) + ".done") if target else R / f".{name.replace('/', '-')}.done"
+        if short in TAKES_MODEL:
+            args += model
+        return Step(name, stage["module"], args, [marker], [], marker=marker)
+
+    chain = [step(st) for st in shared]
+    for prev, cur in zip(chain, chain[1:]):
+        cur.needs = prev.outputs  # each stage needs the one before it
+    out += chain
+    for seed in seeds:
+        per_seed = [step(st, seed) for st in seeded]
+        for prev, cur in zip(chain[-1:] + per_seed, per_seed):
+            cur.needs = prev.outputs
+        out += per_seed
+    ev = ["--character", character_dir, "--judge-url", s["judge_url"], "--rollouts", s["eval"]["rollouts"],
+          *(["--limit", s["eval"]["limit"]] if s["eval"].get("limit") else []), *model]
+    out.append(Step("eval/prompted_base", "character_pipeline.evaluate",
+                    ["--arm", "prompted_base", "--out", R / "eval" / "prompted_base", *ev],
+                    [R / "eval" / "prompted_base" / "summary.json"]))
+    for seed in seeds:
+        for arm in recipe_data.get("eval_arms", []):
+            adapter = Path(fill(arm["adapter"], seed))
+            dest = R / "eval" / f'{arm["arm"]}-seed{seed}'
+            out.append(Step(f'eval/{arm["arm"]}/seed{seed}', "character_pipeline.evaluate",
+                            ["--arm", arm["arm"], "--adapter", adapter, "--out", dest, *ev],
+                            [dest / "summary.json"], [adapter / "adapter_config.json"]))
+    return out
+
+
 def plan(character_dir: Path, runs_root: Path = Path("runs"), device: str = "cuda:0",
          seeds: list[int] | None = None, extra: list[str] | None = None, recipe: Path | None = None,
          model: str | None = None, allow_unpinned: bool = False) -> list[Step]:
     character_dir = Path(character_dir)
     s = settings(character_dir, recipe, model, allow_unpinned)
+    recipe_data = json.loads(Path(recipe).read_text()) if recipe else {}
+    if recipe_data.get("stages"):
+        return plan_staged(character_dir, recipe_data, s, Path(runs_root), device,
+                           s["seeds"] if seeds is None else seeds, extra or [])
     R = Path(runs_root) / s["id"]
     seeds = s["seeds"] if seeds is None else seeds
     model = ["--model", s["model"], "--revision", s["revision"], "--device", device, *(extra or [])]
@@ -226,6 +290,8 @@ def execute(steps: list[Step], only: str | None = None, until: str | None = None
         else:
             log(f"[run]     {step.name}\n          {step.command()}")
             importlib.import_module(step.module).main([str(a) for a in step.args])
+            if step.marker:
+                step.marker.write_text("done\n")
         if until and step.name.startswith(until):
             return "done"
     return "dry-run" if dry_run else "done"

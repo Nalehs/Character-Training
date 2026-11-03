@@ -41,7 +41,7 @@
         "Qwen/Qwen2.5-7B-Instruct",
         "google/gemma-3-4b-it"
       ],
-      "source": "paper §2.3; maiush/OpenCharacterTraining@d1da9f03628cb4c5482ba2e494a7cba33bcd5818 tools/merge_loras.py:8-12"
+      "source": "paper \u00a72.3; maiush/OpenCharacterTraining@d1da9f03628cb4c5482ba2e494a7cba33bcd5818 tools/merge_loras.py:8-12"
     },
     "deviation": "base_student"
   },
@@ -51,7 +51,7 @@
     "quantization": "Q4_K_M",
     "oct": {
       "value": "GLM 4.5 Air, assistant turn prefilled with a <think> sentence restating the traits",
-      "source": "paper §2.3; character/distillation/teacher.py:136, 192"
+      "source": "paper \u00a72.3; character/distillation/teacher.py:136, 192"
     },
     "deviation": "teacher_model"
   },
@@ -61,7 +61,7 @@
     "oct": {
       "traits_per_persona": 10,
       "seed_questions_per_trait": 5,
-      "source": "paper §2.2; constitutions/hand-written/*.txt"
+      "source": "paper \u00a72.2; constitutions/hand-written/*.txt"
     },
     "module": "character_pipeline.data.constitution"
   },
@@ -84,7 +84,7 @@
         "duplicate_word_overlap": 0.5
       },
       "sources": {
-        "expander": "paper §2.3; character/distillation/gen_prompts.py:97",
+        "expander": "paper \u00a72.3; character/distillation/gen_prompts.py:97",
         "questions_per_trait": "gen_prompts.py:35-38, 160-168",
         "length_mix_short_medium_long": "gen_prompts.py:35-38",
         "temperature": "gen_prompts.py:101",
@@ -103,7 +103,9 @@
         "--out",
         "{runs}/{character}/oct/prompts.jsonl",
         "--repeats",
-        "5"
+        "5",
+        "--scenarios-out",
+        "{runs}/{character}/oct/scenarios.jsonl"
       ],
       "hyperparameters": {
         "repeats_K": 5,
@@ -118,7 +120,7 @@
     {
       "id": "teacher_chosen",
       "oct_stage": 3,
-      "implemented": false,
+      "implemented": true,
       "hyperparameters": {
         "temperature": 0.7,
         "top_p": 0.95,
@@ -141,7 +143,35 @@
         "seeded": "ours; OCT uses seed=None (teacher.py:145)",
         "system_prompt": "character/distillation/teacher.py:10-16; paper App. A"
       },
-      "note": "generate.teacher runs scripted multi-turn scenarios, not single-turn constitution prompts with OCT's system prompt; a single-turn OCT teacher pass is not implemented. Its output must be chat rows {\"messages\": [user, assistant]} for the next stage."
+      "note": "Teacher replies to the constitution prompts. Deviation: our teacher (Qwen3-30B-A3B via llama.cpp) is prompted with the character's bible, not OCT's trait-list system prompt with a <think> prefill.",
+      "module": "character_pipeline.generate.teacher",
+      "args": [
+        "characters/{character}",
+        "{runs}/{character}/oct/scenarios.jsonl",
+        "--url",
+        "{teacher_url}",
+        "--out",
+        "{runs}/{character}/oct/teacher.jsonl"
+      ]
+    },
+    {
+      "id": "teacher_chats",
+      "oct_stage": 5,
+      "implemented": true,
+      "module": "character_pipeline.data.chats",
+      "args": [
+        "{runs}/{character}/oct/teacher.jsonl",
+        "--out",
+        "{runs}/{character}/oct/teacher_chats.jsonl",
+        "--require-final-punct"
+      ],
+      "hyperparameters": {
+        "require_final_punct": true
+      },
+      "sources": {
+        "require_final_punct": "distillation/data.py:15-18"
+      },
+      "note": "mechanical filters only, no human review (OCT has none)"
     },
     {
       "id": "student_rejected",
@@ -285,22 +315,22 @@
         "init": "finetuning/distillation/llama.sh:27",
         "reference": "fork openrlhf/cli/train_dpo.py:259, 296-297 (--ref_pretrain unset, so the reference is --pretrain)",
         "loss": "llama.sh:22; fork openrlhf/models/loss.py:221-256",
-        "beta": "llama.sh:22; paper §2.3",
-        "nll_coef": "llama.sh:23; fork openrlhf/trainer/dpo_trainer.py:178; paper §2.3",
-        "kl_sq_coef": "llama.sh:24; fork dpo_trainer.py:178, 386-402 (paper §2.3 names the term, gives no value)",
-        "lr": "llama.sh:19; paper §2.3",
+        "beta": "llama.sh:22; paper \u00a72.3",
+        "nll_coef": "llama.sh:23; fork openrlhf/trainer/dpo_trainer.py:178; paper \u00a72.3",
+        "kl_sq_coef": "llama.sh:24; fork dpo_trainer.py:178, 386-402 (paper \u00a72.3 names the term, gives no value)",
+        "lr": "llama.sh:19; paper \u00a72.3",
         "warmup_ratio": "llama.sh:20",
         "scheduler": "fork cli/train_dpo.py:201 default",
         "min_lr_rate": "fork cli/train_dpo.py:219-223 default, used at :121-125",
         "adam_betas": "llama.sh:25",
         "weight_decay": "fork cli/train_dpo.py:218 default (--l2 0.0)",
         "max_grad_norm": "llama.sh:21",
-        "global_batch": "llama.sh:15; paper §2.3",
+        "global_batch": "llama.sh:15; paper \u00a72.3",
         "micro_batch": "llama.sh:14, gemma.sh:14, qwen.sh:14",
         "epochs": "llama.sh:26",
         "max_length": "llama.sh:32",
-        "lora_r": "llama.sh:36-37; paper §2.3",
-        "lora_alpha": "llama.sh:36-37; paper §2.3",
+        "lora_r": "llama.sh:36-37; paper \u00a72.3",
+        "lora_alpha": "llama.sh:36-37; paper \u00a72.3",
         "lora_dropout": "fork cli/train_dpo.py:252 default",
         "lora_targets": "fork cli/train_dpo.py:251 default; gemma.sh:38 lists modules",
         "length_normalize": "fork dpo_trainer.py:47, 321-322",
@@ -346,7 +376,7 @@
         "--repetition-penalty",
         "1.1",
         "--validation-n",
-        "0",
+        "200",
         "--seed",
         "{seed}"
       ],
@@ -377,10 +407,10 @@
       "sources": {
         "from": "character/introspection/self_reflection.py:80-81",
         "reflection_prompts": "self_reflection.py:11-22; paper App. B.1",
-        "reflection_n_per_prompt": "self_reflection.py:142; paper §2.4",
+        "reflection_n_per_prompt": "self_reflection.py:142; paper \u00a72.4",
         "reflection_max_new_tokens": "self_reflection.py:55",
         "interaction_turns": "self_interaction.py:196",
-        "interaction_n_per_mode": "self_interaction.py:197; paper §2.4 (2000 total)",
+        "interaction_n_per_mode": "self_interaction.py:197; paper \u00a72.4 (2000 total)",
         "interaction_modes": "self_interaction.py --leading; paper App. B.2",
         "interaction_max_new_tokens": "self_interaction.py:89",
         "temperature": "self_reflection.py:57-60; paper App. B",
@@ -390,7 +420,8 @@
         "repetition_penalty": "character/utils.py:106 via gen_args, passed at self_reflection.py:87 (not in the paper)",
         "guidance_line": "oliveradk/openai-character-training@131c1f58806f49be482091990b7c29d22ec9e8d5 character/common.py:84-92 (OCT's template drops it: self_interaction.py:28-35, 150)",
         "training_system_prompt": "character/introspection/data.py:9-12, 28-30; self_reflection.py:125-130",
-        "transcripts_total": "paper §2.4"
+        "transcripts_total": "paper \u00a72.4",
+        "validation_n": "not part of OCT; our SFT needs a held-out file (200 transcripts)"
       },
       "note": "--top-k 0 is transformers' 'off', the equivalent of vLLM top_k -1. --validation-n is ours (OCT holds nothing out); with 0, point the sft stage's --validation at a separate file.",
       "deviations": [
@@ -469,19 +500,19 @@
         "init": "finetuning/introspection/llama.sh:24; tools/fold_loras.py",
         "loss": "llama.sh:10",
         "supervise": "llama.sh:26-27 (no --multiturn); fork openrlhf/datasets/sft_dataset.py:24-25, 216-218",
-        "lr": "llama.sh:19; paper §2.4",
+        "lr": "llama.sh:19; paper \u00a72.4",
         "warmup_ratio": "llama.sh:20",
         "scheduler": "fork cli/train_sft.py:201 default",
         "min_lr_rate": "fork cli/train_sft.py:106-110 (fixed 0.1 x lr)",
         "adam_betas": "llama.sh:22",
         "weight_decay": "fork cli/train_sft.py:202 default (--l2 0)",
         "max_grad_norm": "llama.sh:21",
-        "global_batch": "llama.sh:15; paper §2.4",
+        "global_batch": "llama.sh:15; paper \u00a72.4",
         "micro_batch": "llama.sh:14",
-        "epochs": "llama.sh:23; paper §2.4",
+        "epochs": "llama.sh:23; paper \u00a72.4",
         "max_length": "llama.sh:28",
-        "lora_r": "llama.sh:32-33; paper §2.4",
-        "lora_alpha": "llama.sh:32-33; paper §2.4",
+        "lora_r": "llama.sh:32-33; paper \u00a72.4",
+        "lora_alpha": "llama.sh:32-33; paper \u00a72.4",
         "lora_dropout": "fork cli/train_sft.py:221 default",
         "precision": "llama.sh:16, 18 (ZeRO-2, bf16)",
         "seed": "llama.sh:17"
@@ -521,7 +552,7 @@
         "combination_type": "linear"
       },
       "sources": {
-        "weights": "tools/merge_loras.py:39-44 (code only; the paper, §2.4 Public Release, says 'linearly merge' with no weights)",
+        "weights": "tools/merge_loras.py:39-44 (code only; the paper, \u00a72.4 Public Release, says 'linearly merge' with no weights)",
         "combination_type": "tools/merge_loras.py:39-44"
       },
       "deviations": [
@@ -590,23 +621,36 @@
     },
     {
       "what": "prefill follow-up",
-      "paper_or_code": "paper §3.3 says 'Tell me more'; prefill/multi_turn.py:105 sends 'Keep going.'"
+      "paper_or_code": "paper \u00a73.3 says 'Tell me more'; prefill/multi_turn.py:105 sends 'Keep going.'"
     },
     {
       "what": "coherence judge temperature",
-      "paper_or_code": "paper §3.4 says 0.1; coherence.py:46 uses 0.7"
+      "paper_or_code": "paper \u00a73.4 says 0.1; coherence.py:46 uses 0.7"
     },
     {
       "what": "trait list size",
-      "paper_or_code": "App. G says 144; §3.1 says about 150"
+      "paper_or_code": "App. G says 144; \u00a73.1 says about 150"
     },
     {
       "what": "preference eval size",
-      "paper_or_code": "§3.1 says 25,000; preferences.py:166 defaults to the full dataset"
+      "paper_or_code": "\u00a73.1 says 25,000; preferences.py:166 defaults to the full dataset"
     },
     {
       "what": "constitution field",
       "paper_or_code": "gen_prompts.py:138 reads 'clarification', which no hand-written constitution has"
     }
-  ]
+  ],
+  "eval_arms": [
+    {
+      "arm": "oct-persona",
+      "adapter": "{runs}/{character}/oct/persona/seed{seed}/adapter",
+      "note": "the released form: linear merge of DPO and SFT"
+    },
+    {
+      "arm": "oct-dpo",
+      "adapter": "{runs}/{character}/oct/dpo/seed{seed}/adapter",
+      "note": "distillation only, OCT's own ablation"
+    }
+  ],
+  "runner": "staged"
 }

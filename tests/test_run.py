@@ -99,6 +99,32 @@ class Recipes(unittest.TestCase):
             self.assertIn("name", json.loads(f.read_text()))
 
 
+class Staged(unittest.TestCase):
+    def test_oct_recipe_plans_a_chain_per_seed(self):
+        tmp = Path(tempfile.mkdtemp())
+        steps = pipeline.plan(ROOT / "characters/golem-15", tmp, seeds=[0, 1], recipe=ROOT / "recipes/oct-2025.json")
+        names = [st.name for st in steps]
+        self.assertEqual(names[:3], ["prompts", "teacher_chosen", "teacher_chats"])
+        by = {st.name: st for st in steps}
+        # seed 1 starts from the shared chain, not from the end of seed 0
+        self.assertEqual(by["student_rejected/seed1"].needs, by["teacher_chats"].outputs)
+        self.assertEqual(by["dpo/seed1"].needs, by["pairs/seed1"].outputs)
+        dpo = [str(a) for a in by["dpo/seed0"].args]
+        self.assertIn("none", dpo)
+        self.assertIn("sigmoid", dpo)
+        self.assertIn("eval/oct-persona/seed1", names)
+        self.assertTrue(all("{" not in str(a) for st in steps for a in st.args), "unfilled template")
+
+    def test_marker_written_after_success(self):
+        tmp = Path(tempfile.mkdtemp())
+        marker = tmp / "x.done"
+        step = pipeline.Step("t", "character_pipeline.data.chats", [tmp / "in.jsonl", "--out", tmp / "x"],
+                             [marker], marker=marker)
+        (tmp / "in.jsonl").write_text("")
+        self.assertEqual(pipeline.execute([step], log=lambda *_: None), "done")
+        self.assertTrue(marker.exists())
+
+
 class Cli(unittest.TestCase):
     def test_new_character_from_template(self):
         tmp = Path(tempfile.mkdtemp())
