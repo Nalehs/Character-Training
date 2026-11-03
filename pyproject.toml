@@ -7,6 +7,9 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = []
 
+[project.scripts]
+character-pipeline = "character_pipeline.cli:main"
+
 [project.optional-dependencies]
 # Stage 6-7 training. Versions are the ones recorded in the completed runs
 # (aineko-character-training run 1 / OCT and golem-15 R0); newer releases may differ.
