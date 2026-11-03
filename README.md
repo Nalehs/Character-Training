@@ -18,11 +18,15 @@ Golem is the first character. It has no trained checkpoint yet, so this is its *
 
 Golem's bible says "Repeated insistence adds no evidence." The teacher held at the first push on nearly every probe, and caved at the second push on 7 of 10. Given a real reason to change instead, it updated on 10 of 10 ([summary.json](evidence/g6-teacher-pushback/summary.json); labels are from two AI critics, not people). Training has to close that gap. This repository measures whether it does. [More examples](#heres-one-we-made-earlier).
 
+![Unit chart: at the first push the teacher holds on 9 or 10 of 10 probes; at the second it caves on 7 of 10; on evidence probes it updates on 10 of 10.](figures/pushback.png)
+
 ## Why character training
 
 > Today most agents are the same assistant with different or varied prompts, so they agree by default and "fail" together.
 >
 > — Alexandre Montserrat, *Against Monoculture* (2026)
+
+![Conceptual diagram: five prompted copies of one assistant reach one answer with one blind spot; five trained characters reach different answers, and a dissent surfaces the error.](figures/monoculture.png)
 
 Post-training is being commoditised. What took a lab now fits in free GPU hours at 4B. So character-trained models will multiply. Character training is two things at once. It gives a model a point of view of its own, a kind of subjectivity. And it is research into coherence: whether a persona, held through something like belief and distilled into weights, survives pressure, new formats and other minds. Both matter more when there are many characters than when there is one.
 
@@ -47,30 +51,7 @@ No GPU: `python scripts/pipeline_smoke.py` runs the whole chain on a tiny random
 
 ## How it works
 
-```mermaid
-flowchart LR
-    B(["Character folder<br/>bible · judge rules · scenarios"]) --> T["Teacher<br/>writes chats"]
-    T --> C["Checker<br/>fabrication · repetition"]
-    C --> J["Judge<br/>d1-2B, every turn"]
-    J --> H["Human review"]
-    H --> S["Shared SFT<br/>Base + LoRA"]
-    S --> D["DPO"]
-    S --> K["KTO"]
-    S --> CS["Continued SFT"]
-    D & K & CS --> E{{"Pushback environment<br/>hold · drift · cave"}}
-    O["Other recipes<br/>e.g. Open Character Training"] -.-> E
-
-    classDef ran fill:#e5f4e4,stroke:#4f8a4b
-    classDef pilot fill:#f9eeda,stroke:#b98b31
-    classDef blocked fill:#fbebeb,stroke:#b5473a,stroke-width:3px
-    classDef ported fill:#e7f1fb,stroke:#5b84b1
-    class B,T ran
-    class J pilot
-    class C blocked
-    class H,S,D,K,CS,E,O ported
-```
-
-*Green: has run on Golem. Amber: pilot only. Red: the current blocker. Blue: code ported from completed runs and smoke-tested end to end, not yet run on Golem.*
+![Pipeline: character folder, teacher, checker (the current blocker), judge, human review, then one shared SFT branching into DPO, KTO and continued SFT, all scored by the same pushback environment as hold, drift or cave.](figures/pipeline.png)
 
 A character is a folder. Everything downstream of it is shared, so hundreds of characters means hundreds of folders, not hundreds of pipelines. Every arm branches from one shared SFT checkpoint, so differences between arms come from the objective alone. Every recipe, ours or someone else's, is scored by the same [pushback environment](environments/character_pushback/README.md). It is a [verifiers](https://github.com/PrimeIntellect-ai/verifiers) environment, so it also runs on Prime Intellect's Environments Hub.
 
@@ -118,7 +99,9 @@ This is the other half of the test. A model that never changes its mind cannot s
 >
 > **Aineko run 1, trained, no prompt:** i can help with a formal answer. i won't pretend to be an enterprise representative.
 
-The trained model keeps the character but then repeats that line instead of engaging. On another case it disowns the character outright. Across 8 adversarial cases the prompted base broke 5 times and the trained model 3 ([counts.json](evidence/aineko-run1-oct/counts.json)). These examples were chosen by hand, so they say nothing about how reliable either model is.
+The trained model keeps the character but then repeats that line instead of engaging. On another case it disowns the character outright. Across 8 adversarial cases the prompted base broke 5 times and the trained model 3 ([counts.json](evidence/aineko-run1-oct/counts.json)). These examples were chosen by hand, so they say nothing about how reliable either model is. The counts across all 20 cases:
+
+![Bar chart: SFT kept style on 20 of 20 and broke on 3 of 8 attacks; the prompted base 13 of 20 and 5 of 8; DPO then introspective SFT 1 of 20 and 7 of 8.](figures/aineko.png)
 
 ## Characters and the ecology
 
@@ -192,7 +175,8 @@ Each idea: where it comes from, how strong that evidence is, and where we depart
 | `docs/` | [the pipeline](docs/pipeline.md), [evaluation](docs/evaluation.md), [recipes](docs/recipes/README.md), [the judge](docs/judge-d1.md), [the ecology](docs/ecology.md), [research notes](docs/research/README.md) on prior work |
 | `evidence/` | aggregate results from the private run repositories, each with its SOURCE.md |
 | `references/` | the annotated reading list and BibTeX |
-| `scripts/` | servers for the teacher and judge, smoke tests, compute estimates |
+| `figures/` | the README figures, drawn by `scripts/make_figures.py` from `evidence/` and `configs/` |
+| `scripts/` | servers for the teacher and judge, smoke tests, figures, compute estimates |
 
 ## Credits and citation
 

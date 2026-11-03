@@ -68,6 +68,8 @@ The full write-up of our own recipe is [recipes/character-pipeline-v0.md](recipe
 
 ## The scale ladder
 
+![Four rungs: 0.8B ran (Aineko, Computer-11), 4B pinned (Golem's student), 9B and 27B unpinned.](../figures/ladder.png)
+
 `character-pipeline models` lists the presets in [configs/models](../configs/models). Only what wins at one rung moves up to the next. "Wins" means it holds character under pushback without losing the ability to update on evidence, or losing competence or monitorability.
 
 | Rung | Preset | Revision | Hardware | Status |
