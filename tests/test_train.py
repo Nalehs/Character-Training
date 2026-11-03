@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from character_pipeline.train.common import (assistant_char_spans, encode_chat, labels_from_offsets,
                                              lr_factor)
 from character_pipeline.train.preference import trainer_kwargs, validate_rows
+from character_pipeline.train import sft as sft_module
 from character_pipeline.train.sft import schedule
 
 TOKEN = re.compile(r"<\|im_(?:start|end)\|>|\w+|[^\w\s]|\s+")
@@ -89,6 +90,20 @@ class Schedule(unittest.TestCase):
         self.assertEqual(a, b)
         self.assertEqual(sorted(a[:10]), list(range(10)))
         self.assertNotEqual(a[:10], a[10:])
+
+
+class SftFlags(unittest.TestCase):
+    BASE = ["--train", "t", "--validation", "v", "--out", "o"]
+
+    def test_defaults_are_aineko_run1(self):
+        a = sft_module.parse(self.BASE)
+        self.assertEqual((a.weight_decay, a.warmup, a.min_lr_rate, a.adam_beta2, a.lora_dropout, a.supervise),
+                         (0.01, 0.05, 0.0, 0.999, 0.05, "all"))
+        self.assertIsNone(a.merge_adapter)
+
+    def test_merge_and_init_adapter_are_exclusive(self):
+        with self.assertRaises(SystemExit):
+            sft_module.parse(self.BASE + ["--merge-adapter", "a", "--init-adapter", "b"])
 
 
 def row(kind, **kw):

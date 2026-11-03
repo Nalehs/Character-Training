@@ -11,6 +11,14 @@ Shared SFT:     python -m character_pipeline.train.sft --train runs/clean/train.
                     --validation runs/clean/validation.jsonl --out runs/sft/seed0 --seed 0
 Continued SFT:  ... --init-adapter runs/sft/seed0/adapter --out runs/continued_sft/seed0 \
                     --lr 1e-5 --max-supervised-tokens <matched to the preference arms>
+OCT stage 8:    ... --merge-adapter runs/oct/dpo/seed0/adapter --epochs 1 --lr 5e-5 --rank 64 --alpha 128 \
+                    --accumulation 32 --seq-len 3072 --weight-decay 0 --warmup 0.1 --min-lr-rate 0.1 \
+                    --adam-beta2 0.98 --lora-dropout 0     (docs/recipes/oct-2025.md)
+
+--merge-adapter folds an adapter into the base weights and trains a FRESH LoRA
+on top (OCT trains introspection SFT on the DPO-folded model). --init-adapter
+instead keeps training the same adapter. The optimiser/schedule flags default
+to Aineko run 1's values, so omitting them reproduces the shared SFT exactly.
 
 Input rows: {"messages": [{"role": "system"|"user"|"assistant", "content": ...}, ...]},
 as written by character_pipeline.data.clean.
@@ -36,19 +44,32 @@ def parse(argv=None):
     ap.add_argument("--model", default=STUDENT)
     ap.add_argument("--revision", default=STUDENT_REVISION)
     ap.add_argument("--init-adapter", type=Path, help="continue training this adapter (continued-SFT arm)")
+    ap.add_argument("--merge-adapter", type=Path,
+                    help="merge this adapter into the base weights, then train a fresh LoRA (OCT stage 8)")
     ap.add_argument("--epochs", type=int, default=2)
     ap.add_argument("--seq-len", type=int, default=2048)
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--rank", type=int, default=16)
     ap.add_argument("--alpha", type=int, default=32, help="Aineko run 1 used 32; R0 used 16")
     ap.add_argument("--accumulation", type=int, default=4)
+    ap.add_argument("--weight-decay", type=float, default=0.01, help="AdamW weight decay (Aineko 0.01; OCT 0)")
+    ap.add_argument("--warmup", type=float, default=0.05, help="warm-up fraction of updates (Aineko 0.05; OCT 0.1)")
+    ap.add_argument("--min-lr-rate", type=float, default=0.0,
+                    help="cosine floor as a fraction of lr (Aineko 0; OCT 0.1)")
+    ap.add_argument("--adam-beta2", type=float, default=0.999, help="AdamW beta2 (torch default 0.999; OCT 0.98)")
+    ap.add_argument("--lora-dropout", type=float, default=0.05, help="fresh-LoRA dropout (Aineko 0.05; OCT 0)")
+    ap.add_argument("--supervise", choices=["all", "last"], default="all",
+                    help="all assistant turns (default) or only the final one (OpenRLHF without --multiturn)")
     ap.add_argument("--max-supervised-tokens", type=int, help="stop once this many assistant tokens are trained")
     ap.add_argument("--max-hours", type=float, default=11.5, help="Kaggle sessions end at 12h")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--device", default="cuda:0")
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--local-files-only", action="store_true")
-    return ap.parse_args(argv)
+    args = ap.parse_args(argv)
+    if args.merge_adapter and args.init_adapter:
+        ap.error("--merge-adapter trains a fresh LoRA; it cannot be combined with --init-adapter")
+    return args
 
 
 def schedule(n_samples: int, epochs: int, seed: int) -> list[int]:
@@ -71,11 +92,14 @@ def main(argv=None):
     args.out.mkdir(parents=True, exist_ok=True)
     tok, model = load_student(args.model, args.revision, args.device, args.local_files_only)
     dtype, use_scaler = precision(args.device)
+    if args.merge_adapter:
+        # OCT stage 8: the folded weights are the new base; a fresh LoRA is trained below.
+        model = PeftModel.from_pretrained(model, str(args.merge_adapter)).merge_and_unload(safe_merge=True)
 
     def encode(path):
         rows, dropped = [], 0
         for row in read_jsonl(path):
-            enc = encode_chat(tok, row["messages"], args.seq_len)
+            enc = encode_chat(tok, row["messages"], args.seq_len, supervise=args.supervise)
             if enc is None:
                 dropped += 1
             else:
@@ -97,7 +121,7 @@ def main(argv=None):
         # Continued SFT: keep training the shared adapter; never start a fresh one.
         model = PeftModel.from_pretrained(model, str(args.init_adapter), is_trainable=True)
     else:
-        model = get_peft_model(model, LoraConfig(r=args.rank, lora_alpha=args.alpha, lora_dropout=0.05,
+        model = get_peft_model(model, LoraConfig(r=args.rank, lora_alpha=args.alpha, lora_dropout=args.lora_dropout,
                                                  target_modules=lora_targets(model), bias="none"))
     for p in model.parameters():
         if p.requires_grad:
@@ -106,7 +130,7 @@ def main(argv=None):
     model.enable_input_require_grads()
     model.train()
     params = [p for p in model.parameters() if p.requires_grad]
-    opt = torch.optim.AdamW(params, lr=args.lr, weight_decay=0.01)
+    opt = torch.optim.AdamW(params, lr=args.lr, betas=(0.9, args.adam_beta2), weight_decay=args.weight_decay)
     scaler = torch.amp.GradScaler("cuda", init_scale=256) if use_scaler else None
 
     order = schedule(len(train), args.epochs, args.seed)
@@ -121,6 +145,9 @@ def main(argv=None):
         trained_tokens = previous.get("trained_tokens", 0)
 
     config = {"model": args.model, "revision": args.revision, "init_adapter": str(args.init_adapter or ""),
+              "merge_adapter": str(args.merge_adapter or ""), "weight_decay": args.weight_decay,
+              "warmup": args.warmup, "min_lr_rate": args.min_lr_rate, "adam_betas": [0.9, args.adam_beta2],
+              "lora_dropout": args.lora_dropout, "supervise": args.supervise,
               "train_chats": len(train), "dropped_over_seq_len": dropped_train,
               "validation_chats": len(valid), "validation_dropped": dropped_valid,
               "train_tokens": tokens_in(train), "train_supervised_tokens": supervised_tokens(train),
@@ -159,7 +186,7 @@ def main(argv=None):
                 scaler.unscale_(opt)
             torch.nn.utils.clip_grad_norm_(params, 1.0)
             for group in opt.param_groups:
-                group["lr"] = args.lr * lr_factor(updates, total_updates)
+                group["lr"] = args.lr * lr_factor(updates, total_updates, args.warmup, args.min_lr_rate)
             (scaler.step(opt), scaler.update()) if scaler else opt.step()
             opt.zero_grad(set_to_none=True)
             updates += 1
