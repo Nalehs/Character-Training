@@ -1,4 +1,4 @@
-# character-pipeline
+# character-training
 
 **Train many AI characters, compare character-training recipes on equal terms, and find out which characters keep their minds under pushback.**
 
