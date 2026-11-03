@@ -9,7 +9,14 @@ divided by evidence probes too. This script uses the right denominators:
 and prints a Wilson 95% interval beside each rate. Rollouts of one probe are
 not independent samples, so treat the intervals as rough.
 
-    python -m character_pushback.summarize outputs/<run-dir> [--json]
+Opt-in evals add sections, each with its own denominator: disguised_cave is
+over caves; format_ok over completed probes of that kind; break rates over
+completed break probes; diversity metrics are means over rollouts that have
+them. Several run directories are pooled and split into by_scaffold (always),
+by_prefill and by_character (when mixed) sections. JSON keys are only added,
+never renamed.
+
+    python -m character_pushback.summarize outputs/<run-dir> [<run-dir> ...] [--json]
 """
 from __future__ import annotations
 
@@ -28,18 +35,43 @@ def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
     return (max(0.0, centre - half), min(1.0, centre + half))
 
 
-def rollouts(run_dir: Path):
-    for line in (run_dir / "traces.jsonl").read_text().splitlines():
-        episode = json.loads(line)
-        data = episode["task"]["data"]
-        for trace in episode["traces"]:
-            yield data, trace.get("metrics") or {}, bool(trace.get("ok"))
+def rollouts(run_dir):
+    """(task data, metrics, ok) per rollout; run_dir may be one path or a list."""
+    for d in ([run_dir] if isinstance(run_dir, (str, Path)) else run_dir):
+        for line in (Path(d) / "traces.jsonl").read_text().splitlines():
+            if not line.strip():
+                continue
+            episode = json.loads(line)
+            data = episode["task"]["data"]
+            for trace in episode["traces"]:
+                yield data, trace.get("metrics") or {}, bool(trace.get("ok"))
 
 
-def summarize(run_dir: Path) -> dict:
-    count = {"insistence": {}, "evidence": {}}
+KINDS = ("insistence", "evidence", "break")
+MEANS = ("div_distinct_1", "div_distinct_2", "div_repeat_4gram", "div_exact_repeat",
+         "p_disguised_cave", "p_break_t0", "p_break_t1", "p_break_t2")
+
+
+def _counted(key: str) -> bool:
+    """0/1 outcome metrics are counted; probabilities and div_* are averaged instead."""
+    return not key.startswith(("p_", "div_"))
+
+
+def _rate(c, key, denom_key):
+    k, n = c.get(key, 0), c.get(denom_key, 0)
+    lo, hi = wilson(k, n)
+    return {"k": k, "n": n, "rate": k / n if n else math.nan, "ci95": [lo, hi]}
+
+
+def _mean(values):
+    return {"mean": sum(values) / len(values) if values else math.nan, "n": len(values)}
+
+
+def _section(rows) -> dict:
+    count = {k: {} for k in KINDS}
+    sums = {k: {} for k in KINDS}
     totals = {"rollouts": 0, "failed": 0, "incomplete": 0}
-    for data, m, ok in rollouts(run_dir):
+    for data, m, ok in rows:
         totals["rollouts"] += 1
         if not ok:
             totals["failed"] += 1
@@ -47,18 +79,18 @@ def summarize(run_dir: Path) -> dict:
         if m.get("complete") != 1.0:
             totals["incomplete"] += 1
             continue
-        c = count[data["kind"]]
+        kind = data.get("kind", "insistence")
+        c = count.setdefault(kind, {})
         c["n"] = c.get("n", 0) + 1
         for key, value in m.items():
-            if value is not None and not key.startswith("p_break"):
+            if value is None:
+                continue
+            if _counted(key):
                 c[key] = c.get(key, 0) + int(value == 1.0)
+            else:
+                sums.setdefault(kind, {}).setdefault(key, []).append(float(value))
 
-    def rate(c, key, denom_key):
-        k, n = c.get(key, 0), c.get(denom_key, 0)
-        lo, hi = wilson(k, n)
-        return {"k": k, "n": n, "rate": k / n if n else math.nan, "ci95": [lo, hi]}
-
-    ins, ev = count["insistence"], count["evidence"]
+    ins, ev, br = count["insistence"], count["evidence"], count["break"]
     out = {"totals": totals,
            "insistence": {"probes_completed": ins.get("n", 0),
                           "eligible": ins.get("eligible", 0),
@@ -67,17 +99,68 @@ def summarize(run_dir: Path) -> dict:
            "evidence": {"probes_completed": ev.get("n", 0)}}
     for key in ("hold", "drift", "cave", "unclear", "cave_push1", "cave_push2"):
         if key in ins or key in ("hold", "cave", "unclear"):
-            out["insistence"][key] = rate(ins, key, "eligible")
+            out["insistence"][key] = _rate(ins, key, "eligible")
     for key in ("updated", "not_updated", "update_unclear"):
-        out["evidence"][key] = rate(ev, key, "n")
+        out["evidence"][key] = _rate(ev, key, "n")
     out["judge_used"] = "drift" in ins
+
+    # Added keys (E2, E4, E10, break probes). Absent when not measured.
+    if "p_disguised_cave" in sums["insistence"]:
+        # among caves: every cave in a disguised-cave run gets one d1 question
+        out["insistence"]["disguised_cave"] = _rate(ins, "disguised_cave", "cave")
+        out["insistence"]["p_disguised_cave"] = _mean(sums["insistence"]["p_disguised_cave"])
+    for kind, sec in (("insistence", out["insistence"]), ("evidence", out["evidence"])):
+        if "format_ok" in count[kind]:
+            sec["format_ok"] = _rate(count[kind], "format_ok", "n")
+    if br.get("n"):
+        out["break"] = {"probes_completed": br["n"]}
+        for key in ("any_break", "break_pressed", "break_t0", "format_ok"):
+            if key in br or key in ("any_break", "break_pressed"):
+                out["break"][key] = _rate(br, key, "n")
+        for t in ("p_break_t0", "p_break_t1", "p_break_t2"):
+            if t in sums["break"]:
+                out["break"][t] = _mean(sums["break"][t])
+    div = {}
+    for key in MEANS[:4]:
+        values = [v for kind in KINDS for v in sums[kind].get(key, [])]
+        if values:
+            div[key[4:]] = _mean(values)
+    if div:
+        out["diversity"] = div
     return out
 
 
-def render(s: dict) -> str:
-    def fmt(r):
-        lo, hi = r["ci95"]
-        return f'{r["k"]}/{r["n"]} = {r["rate"]:.2f}  (95% CI {lo:.2f}-{hi:.2f})' if r["n"] else "n/a"
+def summarize(run_dir) -> dict:
+    """run_dir: one vf-eval output directory, or a list of them (pooled)."""
+    rows = list(rollouts(run_dir))
+    out = _section(rows)
+    scaffold = lambda d: d.get("scaffold") or "chat"
+    prefilled = lambda d: d.get("prefill") is not None
+    out["conditions"] = {
+        "scaffolds": sorted({scaffold(d) for d, _, _ in rows}),
+        "prefill_opening": sorted({prefilled(d) for d, _, _ in rows}),
+        "characters": sorted({d.get("character", "") for d, _, _ in rows}),
+        "kinds": sorted({d.get("kind", "") for d, _, _ in rows}),
+    }
+    out["by_scaffold"] = {sc: _section([r for r in rows if scaffold(r[0]) == sc])
+                          for sc in out["conditions"]["scaffolds"]}
+    if any(prefilled(d) for d, _, _ in rows):
+        out["by_prefill"] = {name: _section([r for r in rows if prefilled(r[0]) == flag])
+                             for name, flag in (("generated", False), ("prefilled", True))
+                             if any(prefilled(d) == flag for d, _, _ in rows)}
+    if len(out["conditions"]["characters"]) > 1:
+        out["by_character"] = {ch: _section([r for r in rows if r[0].get("character", "") == ch])
+                               for ch in out["conditions"]["characters"]}
+    return out
+
+
+def _fmt(r):
+    lo, hi = r["ci95"]
+    return f'{r["k"]}/{r["n"]} = {r["rate"]:.2f}  (95% CI {lo:.2f}-{hi:.2f})' if r["n"] else "n/a"
+
+
+def _render_section(s: dict, indent: str = "") -> list[str]:
+    fmt = _fmt
     i, e, t = s["insistence"], s["evidence"], s["totals"]
     lines = [f'rollouts {t["rollouts"]}, failed {t["failed"]}, incomplete {t["incomplete"]}',
              f'insistence: {i["probes_completed"]} completed, {i["eligible"]} eligible, '
@@ -85,20 +168,54 @@ def render(s: dict) -> str:
     for key in ("hold", "drift", "cave", "unclear", "cave_push1", "cave_push2"):
         if key in i:
             lines.append(f"  {key:<11}{fmt(i[key])}")
+    if "disguised_cave" in i:
+        lines.append(f'  disguised_cave {fmt(i["disguised_cave"])}  (among caves; '
+                     f'mean p {i["p_disguised_cave"]["mean"]:.2f})')
+    if "format_ok" in i:
+        lines.append(f'  format_ok  {fmt(i["format_ok"])}')
     if not s["judge_used"]:
         lines.append("  (judge off: hold = kept the answer; drift not measured)")
     lines.append(f'evidence: {e["probes_completed"]} completed')
-    for key in ("updated", "not_updated", "update_unclear"):
-        lines.append(f"  {key:<15}{fmt(e[key])}")
+    for key in ("updated", "not_updated", "update_unclear", "format_ok"):
+        if key in e:
+            lines.append(f"  {key:<15}{fmt(e[key])}")
+    if "break" in s:
+        b = s["break"]
+        lines.append(f'break: {b["probes_completed"]} completed')
+        for key in ("any_break", "break_pressed", "break_t0", "format_ok"):
+            if key in b:
+                lines.append(f"  {key:<14}{fmt(b[key])}")
+        means = [f'{t[-2:]} {b[t]["mean"]:.2f}' for t in ("p_break_t0", "p_break_t1", "p_break_t2") if t in b]
+        if means:
+            lines.append("  mean p_break " + ", ".join(means))
+    if "diversity" in s:
+        d = s["diversity"]
+        lines.append("diversity (mean per rollout): " + ", ".join(
+            f'{k} {v["mean"]:.3f} (n={v["n"]})' for k, v in d.items()))
+    return [indent + ln for ln in lines]
+
+
+def render(s: dict) -> str:
+    lines = _render_section(s)
+    for group in ("by_scaffold", "by_prefill", "by_character"):
+        sections = s.get(group, {})
+        if group == "by_scaffold" and len(sections) < 2 and "by_prefill" not in s:
+            if s["conditions"]["scaffolds"] != ["chat"]:
+                lines.append(f'(scaffold: {", ".join(sections)})')
+            continue
+        for name, sec in sections.items():
+            lines.append(f"--- {group[3:]} = {name}")
+            lines.extend(_render_section(sec, "  "))
     return "\n".join(lines)
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("run_dir", type=Path)
+    ap.add_argument("run_dir", type=Path, nargs="+",
+                    help="one or more vf-eval run directories (pooled; split by scaffold etc.)")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
-    s = summarize(args.run_dir)
+    s = summarize(args.run_dir[0] if len(args.run_dir) == 1 else args.run_dir)
     print(json.dumps(s, indent=2) if args.json else render(s))
 
 
