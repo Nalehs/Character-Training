@@ -7,7 +7,7 @@ Each recipe has a card here (what it is, credit, every stage, and how it maps on
 | Recipe | Credit | Start | Data | Objectives | Can this repo run it? |
 | --- | --- | --- | --- | --- | --- |
 | [character-pipeline-v0](character-pipeline-v0.md) | Montserrat 2026 | Base | chat teacher + scripted callers, checker, d1 judge, human review | shared SFT → DPO / KTO / continued SFT | **Yes** (smoke-tested end to end) |
-| [Open Character Training](oct-2025.md) | Maiya, Bartsch, Lambert, Hubinger 2025 | Instruct | constitution → teacher vs student pairs; introspection | DPO (+NLL) → introspective SFT → merge | **Mostly**: one KL term missing, deviations listed |
+| [Open Character Training](oct-2025.md) | Maiya, Bartsch, Lambert, Hubinger 2025 | Instruct | constitution → teacher vs student pairs; introspection | DPO (+NLL) → introspective SFT → merge | **Yes**, from one command (`--recipe recipes/oct-2025.json`); missing: prompt expansion, the KL term and OCT's own evals; deviations listed |
 | [Zero](zero-2026.md) | Moving Castles 2026 | Base | two-model simulated chats, mixed API generators, bible + graph | LoRA SFT (+ embeddings) → GRPO/DAPO | **Partly**: SFT yes; simulated partner and GRPO missing |
 | [Computer](computer-2026.md) | Celeste (@parafactual), with Luxia | Base | loom over a base model from a seed taxonomy, hand-curated documents | full FT → self-preference distillation → online self-preference RL → self-SFT | **No**: loom, document SFT, self-preference and online RL missing |
 

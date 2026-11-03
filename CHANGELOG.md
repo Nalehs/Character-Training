@@ -6,6 +6,22 @@ Dated changes to the public recipe. Dates describe the decision or published upd
 
 Added Open Character Training (Maiya et al. 2025) as a flag-gated recipe: [docs/recipes/oct-2025.md](docs/recipes/oct-2025.md) and [recipes/oct-2025.json](recipes/oct-2025.json). DPO can start from the bare student with OCT's NLL term and schedule. SFT can train a fresh LoRA on a merged adapter. New modules generate OCT's introspective data, merge the adapters and read OCT-format constitutions. Golem has a draft `constitution.json`. OCT's KL term is not implemented and is recorded as a deviation. Existing arms are unchanged. Only the tiny-model CPU smoke test has run.
 
+## 2026-11-03
+
+Pipeline-first restructure.
+- One CLI, `character-pipeline` (`new`, `run`, `status`, `review-sheet`, `ecology`, `models`, `recipes`, plus every stage).
+- A resumable orchestrator that stops at the two human steps.
+- Recipe files: our own, and Open Character Training as a staged recipe that runs from one command.
+- Model-scale presets from 0.8B to 27B; presets without a pinned revision refuse to train.
+- A student sampler, a minimal OpenAI-compatible server and a one-arm eval runner.
+- The ecology registry and cross-judge distinctness.
+- A prompted-instruct control.
+- Opt-in pushback evals: disguised cave, scaffold transfer, mode collapse, name swap, break probes and the prefill attack.
+
+Researched prior work and corrected two earlier claims against primary sources. Computer's student is Llama 3.1 70B base, not DeepSeek-V3-Base (which was its loom generator), and its model cards show no KTO. Zero used no loom and no base-model teacher.
+
+Added recipe cards for this repository, OCT, Zero and Computer; docs on the d1 judge and the ecology; the LessWrong character-training research in the references; and CITATION.cff.
+
 ## 2026-11-02
 
 Turned the recipe into runnable code, porting it from the private run repositories rather than rewriting it. The teacher loop came from golem-15 G6. The checker and judge came from golem-15 and decision-models. Cleaning and pair building are new. SFT, DPO and KTO came from Aineko. Student loading and masking came from the R0 smoke test. Activation code came from persona-vectors and neurons.
