@@ -2,7 +2,7 @@
 
 **An open pipeline for training many AI characters, comparing character-training recipes on equal terms across model scales, and stress-testing the results under pushback.**
 
-Alexandre Montserrat, Berlin. Research code: every stage runs end to end on a tiny model in local smoke tests, but Golem, the first character, is not trained yet. [What is cooked and what is not](#status).
+Every stage runs end to end in local smoke tests; [status](#status) says what has run on real models.
 
 Post-training is becoming a commodity, and trained characters will proliferate with it. This repository is built for that world. It lets anyone go from a character description to trained, evaluated model arms with one command. It runs someone else's recipe on the same character with a single flag. And it moves the winners up a ladder from 0.8B to 27B. The long-term aim is an *ecology*: many distinct characters, across scales and model families, in shared multi-agent worlds, instead of the usual simulations populated by copies of one prompted assistant. [Why](#why-character-training).
 
