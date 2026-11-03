@@ -181,5 +181,13 @@ class PreferenceFlags(unittest.TestCase):
                 self.kwargs(*extra, kind=kind)
 
 
+class MergeFlags(unittest.TestCase):
+    def test_defaults_are_oct_code_values(self):
+        from character_pipeline.train import merge
+        a = merge.parse(["--dpo", "d", "--sft", "s", "--out", "o"])
+        self.assertEqual((a.weights, a.combination_type), ([1.0, 0.25], "linear"))
+        self.assertIn("does not state", merge.__doc__)
+
+
 if __name__ == "__main__":
     unittest.main()
