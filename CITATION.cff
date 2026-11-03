@@ -5,7 +5,7 @@ authors:
   - family-names: Montserrat
     given-names: Alexandre
     affiliation: "bianjie.systems, Berlin"
-repository-code: "https://github.com/hdmurder/character-pipeline"
+repository-code: "https://github.com/Nalehs/Character-Training"
 license: MIT
 date-released: "2026-11-03"
 keywords: [character training, persona, DPO, KTO, sycophancy, pushback, multi-agent, verifiers]

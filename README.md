@@ -38,7 +38,7 @@ flowchart LR
 ## Quickstart
 
 ```bash
-git clone https://github.com/hdmurder/character-pipeline && cd character-pipeline
+git clone https://github.com/Nalehs/Character-Training && cd Character-Training
 pip install -e ".[train]"                        # pipeline + training (torch, transformers, peft, trl 1.14.1)
 pip install -e environments/character_pushback   # the verifiers evaluation environment
 

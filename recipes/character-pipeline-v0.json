@@ -1,7 +1,7 @@
 {
   "name": "character-pipeline-v0",
   "summary": "Teacher chats filtered by a fabrication checker, a per-turn d1-2B judge and human review; one shared LoRA SFT checkpoint on a Base student; DPO, KTO and continued-SFT arms branched from it with the SFT frozen as reference; scored under multi-turn pushback.",
-  "cite": "Montserrat, A. (2026). character-pipeline. https://github.com/hdmurder/character-pipeline",
+  "cite": "Montserrat, A. (2026). character-pipeline. https://github.com/Nalehs/Character-Training",
   "status": "Code smoke-tested end to end on a tiny model; not yet run on Golem.",
   "arms": ["sft", "dpo", "kto", "continued_sft"],
   "pipeline": {

@@ -1,6 +1,6 @@
 # Open Character Training (OCT): code, paper and a port, read for character-pipeline
 
-Prepared 2026-11-03 for `hdmurder/character-pipeline`. Nothing in `this repository` was modified.
+Prepared 2026-11-03 for `Nalehs/Character-Training`. Nothing in `this repository` was modified.
 
 Sources studied (all paraphrased; numbers carry their location):
 
