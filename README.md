@@ -187,7 +187,7 @@ Serves one Qwen3.5-4B-Base character adapter per arm. Compute is free Kaggle T4s
 
 **Serving:** turn Qwen's thinking off (`chat_template_kwargs: {"enable_thinking": false}`). Training renders chats with thinking disabled, and the environment's mechanical reader expects plain answers. Give trained arms no system prompt; the character should be in the weights.
 
-**Checking your kitchen:** `python -m unittest discover -s tests` runs the pipeline's unit tests on the standard library alone. The 3 expected failures are the checker's known bugs. `python scripts/train_smoke.py` runs steps 6–7 on CPU against a tiny random model, which checks the code paths, not the character. `environments/character_pushback/smoke/run_smoke.sh` runs step 8 through `vf-eval` against stand-in servers.
+**Checking your kitchen:** `python -m unittest discover -s tests` runs the pipeline's unit tests on the standard library alone. The 3 expected failures are the checker's known bugs. `python scripts/train_smoke.py` runs steps 6–7 on CPU against a tiny random model, which checks the code paths, not the character. `environments/character_pushback/smoke/run_smoke.sh` runs step 8 through `vf-eval` against stand-in servers. `python scripts/oct_smoke.py` does the same code-path check for the Open Character Training reproduction ([docs/recipes/oct-2025.md](docs/recipes/oct-2025.md)), whose flags are off by default.
 
 ### Things we tried that failed
 

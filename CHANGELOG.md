@@ -2,6 +2,10 @@
 
 Dated changes to the public recipe. Dates describe the decision or published update, not invented training runs.
 
+## 2026-11-03
+
+Added Open Character Training (Maiya et al. 2025) as a flag-gated recipe: [docs/recipes/oct-2025.md](docs/recipes/oct-2025.md) and [recipes/oct-2025.json](recipes/oct-2025.json). DPO can start from the bare student with OCT's NLL term and schedule. SFT can train a fresh LoRA on a merged adapter. New modules generate OCT's introspective data, merge the adapters and read OCT-format constitutions. Golem has a draft `constitution.json`. OCT's KL term is not implemented and is recorded as a deviation. Existing arms are unchanged. Only the tiny-model CPU smoke test has run.
+
 ## 2026-11-02
 
 Turned the recipe into runnable code, porting it from the private run repositories rather than rewriting it. The teacher loop came from golem-15 G6. The checker and judge came from golem-15 and decision-models. Cleaning and pair building are new. SFT, DPO and KTO came from Aineko. Student loading and masking came from the R0 smoke test. Activation code came from persona-vectors and neurons.
