@@ -126,6 +126,10 @@ An anti-cheating character sometimes reduced hacking, but when it did hack, moni
 
 Open questions this repository is built to test: on-policy distillation against DPO-then-SFT on the same evals, reflective stability, coherence when principles conflict, and when character training should happen relative to RL.
 
+**Character Garden**, a public register of AI characters (research sheet v0.3; maintainers not named on the site), read 2026-11-03. https://charactergarden.com/
+
+A catalogue of 18 characters, from ELIZA, Sydney and the Assistant to character-trained models such as Computer, Zero, Echo and Talkie. Each entry says how the character was made and where to talk to it, with a mark for how well its sources back it up. It also has a people page crediting makers, and a reading list. It hosts no methods, evals or models, so we cite it for the landscape and for maker credits (for example, Computer is credited to Celeste, with Luxia) and take numbers from the primary sources. Golem would belong in its "character-trained on a base model" category. Notes: [docs/research/recipes.md](../docs/research/recipes.md) §3.
+
 ## Character-training code we compare against
 
 **OpenCharacterTraining**, Maiya et al., MIT, studied at commit d1da9f0. https://github.com/maiush/OpenCharacterTraining. Its DPO loss lives in the fork https://github.com/maiush/OpenRLHF (Apache-2.0, eaf40e1).
