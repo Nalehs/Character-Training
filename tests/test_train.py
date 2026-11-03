@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 from character_pipeline.train.common import (assistant_char_spans, encode_chat, labels_from_offsets,
                                              lr_factor)
+from character_pipeline.train import preference as preference_module
 from character_pipeline.train.preference import trainer_kwargs, validate_rows
 from character_pipeline.train import sft as sft_module
 from character_pipeline.train.sft import schedule
@@ -137,6 +138,45 @@ class PreferenceRows(unittest.TestCase):
         self.assertEqual(dpo["loss_type"], ["sigmoid"]); self.assertEqual(kto["loss_type"], "kto")
         self.assertTrue(dpo["precompute_ref_log_probs"] and kto["precompute_ref_log_probs"])
         self.assertEqual(dpo["beta"], 0.1)
+
+
+class PreferenceFlags(unittest.TestCase):
+    BASE = ["--data", "d", "--out", "o"]
+
+    def kwargs(self, *extra, kind="dpo", adapter="runs/sft/adapter"):
+        from pathlib import Path
+        args = preference_module.parse([kind, "--sft-adapter", adapter, *self.BASE, *extra])
+        return args, trainer_kwargs(kind, Path("x"), args)
+
+    def test_defaults_leave_trl_alone(self):
+        args, kw = self.kwargs()
+        for key in ("warmup_steps", "lr_scheduler_type", "lr_scheduler_kwargs", "adam_beta2", "weight_decay",
+                    "max_grad_norm", "loss_weights"):
+            self.assertNotIn(key, kw)
+        self.assertEqual(kw["loss_type"], ["sigmoid"])
+        self.assertEqual(kw["gradient_accumulation_steps"], 4)
+        self.assertEqual(preference_module.deviations(args), [])
+        self.assertEqual(str(args.sft_adapter), "runs/sft/adapter")
+
+    def test_oct_stage6_flags(self):
+        args, kw = self.kwargs("--loss-type", "sigmoid", "sft", "--loss-weights", "1.0", "0.1", "--warmup", "0.1",
+                               "--scheduler", "cosine_with_min_lr", "--min-lr-rate", "0.1", "--adam-beta2", "0.98",
+                               "--weight-decay", "0", "--max-grad-norm", "1.0", "--batch-size", "2",
+                               "--global-batch", "32", "--lora-dropout", "0", adapter="none")
+        self.assertIsNone(args.sft_adapter)
+        self.assertEqual((kw["loss_type"], kw["loss_weights"]), (["sigmoid", "sft"], [1.0, 0.1]))
+        self.assertEqual(kw["gradient_accumulation_steps"], 16)
+        self.assertEqual(kw["lr_scheduler_kwargs"], {"min_lr_rate": 0.1})
+        self.assertEqual((kw["warmup_steps"], kw["adam_beta2"], kw["weight_decay"]), (0.1, 0.98, 0.0))
+        self.assertTrue(any("KL" in d for d in preference_module.deviations(args)))
+
+    def test_bad_combinations(self):
+        for extra, kind in ((["--loss-type", "sigmoid", "sft", "--loss-weights", "1.0"], "dpo"),
+                            (["--min-lr-rate", "0.1"], "dpo"),
+                            (["--global-batch", "3", "--batch-size", "2"], "dpo"),
+                            (["--loss-type", "sigmoid", "sft"], "kto")):
+            with self.assertRaises(ValueError):
+                self.kwargs(*extra, kind=kind)
 
 
 if __name__ == "__main__":
