@@ -29,12 +29,21 @@ def read_jsonl(path) -> list[dict]:
     return [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
 
 
-def lr_factor(update: int, total_updates: int, warmup_fraction: float = 0.05) -> float:
-    """Aineko run 1 schedule: linear warm-up over 5% of updates, then cosine decay to 0."""
+def lr_factor(update: int, total_updates: int, warmup_fraction: float = 0.05,
+              min_lr_rate: float = 0.0) -> float:
+    """Aineko run 1 schedule: linear warm-up over 5% of updates, then cosine decay to 0.
+
+    `min_lr_rate` > 0 decays to that fraction of the peak instead of 0, the shape
+    of transformers' `cosine_with_min_lr` used by OCT's OpenRLHF fork (floor 0.1).
+    At the default 0 the value is exactly Aineko's.
+    """
     warm = max(1, int(warmup_fraction * total_updates))
     ramp = min(1.0, (update + 1) / warm)
     progress = max(0, update - warm) / max(1, total_updates - warm)
-    return ramp * (0.5 + 0.5 * math.cos(math.pi * progress))
+    cosine = 0.5 + 0.5 * math.cos(math.pi * progress)
+    if min_lr_rate:
+        cosine = min_lr_rate + (1.0 - min_lr_rate) * cosine
+    return ramp * cosine
 
 
 def assistant_char_spans(render, messages: list[dict]) -> list[tuple[int, int]]:
@@ -68,17 +77,25 @@ def labels_from_offsets(input_ids: list[int], offsets: list[tuple[int, int]],
     return out
 
 
-def encode_chat(tok, messages: list[dict], max_len: int) -> dict | None:
+def encode_chat(tok, messages: list[dict], max_len: int, supervise: str = "all") -> dict | None:
     """Token ids and labels for one conversation; None if nothing is supervised.
 
     Chats longer than max_len are dropped (the caller counts them), never
     truncated: truncation could cut an assistant body and change the target.
+
+    supervise="all" (default) trains every assistant turn. "last" trains only the
+    final assistant message, as OCT's OpenRLHF SFT does without --multiturn
+    (fork openrlhf/datasets/sft_dataset.py:24-25, 216-218).
     """
+    if supervise not in ("all", "last"):
+        raise ValueError(f"supervise must be 'all' or 'last', not {supervise!r}")
     def render(msgs, gen):
         return tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=gen,
                                        enable_thinking=False)
     full = render(messages, False)
     spans = assistant_char_spans(render, messages)
+    if supervise == "last":
+        spans = spans[-1:]
     enc = tok(full, return_offsets_mapping=True, add_special_tokens=False)
     if len(enc["input_ids"]) > max_len:
         return None

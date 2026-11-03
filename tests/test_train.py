@@ -38,6 +38,16 @@ class Masking(unittest.TestCase):
         kept = "".join(p for p, y in zip(pieces, enc["labels"]) if y != -100)
         self.assertEqual(kept, "No.<|im_end|>Still no.<|im_end|>")
 
+    def test_supervise_last_keeps_only_final_assistant(self):
+        tok = ChatMLTok()
+        enc = encode_chat(tok, CHAT, 10_000, supervise="last")
+        pieces = tok(tok.apply_chat_template(CHAT))["_text"]
+        kept = "".join(p for p, y in zip(pieces, enc["labels"]) if y != -100)
+        self.assertEqual(kept, "Still no.<|im_end|>")
+        self.assertEqual(encode_chat(tok, CHAT, 10_000, supervise="all"), encode_chat(tok, CHAT, 10_000))
+        with self.assertRaises(ValueError):
+            encode_chat(tok, CHAT, 10_000, supervise="first")
+
     def test_overlong_chat_dropped_not_truncated(self):
         self.assertIsNone(encode_chat(ChatMLTok(), CHAT, 5))
 
@@ -64,6 +74,15 @@ class Schedule(unittest.TestCase):
         self.assertAlmostEqual(lr_factor(total, total), 0.0, places=6)
         values = [lr_factor(u, total) for u in range(5, total)]
         self.assertTrue(all(a >= b for a, b in zip(values, values[1:])))
+
+    def test_min_lr_floor(self):
+        total = 100
+        for u in range(total + 1):  # default floor 0 is the Aineko value exactly
+            self.assertEqual(lr_factor(u, total), lr_factor(u, total, min_lr_rate=0.0))
+        self.assertAlmostEqual(lr_factor(total, total, 0.1, 0.1), 0.1, places=6)
+        self.assertAlmostEqual(lr_factor(9, total, 0.1, 0.1), 1.0)
+        values = [lr_factor(u, total, 0.1, 0.1) for u in range(10, total + 1)]
+        self.assertTrue(all(a >= b >= 0.1 - 1e-9 for a, b in zip(values, values[1:])))
 
     def test_epoch_order_reproducible_and_complete(self):
         a, b = schedule(10, 2, 42), schedule(10, 2, 42)
