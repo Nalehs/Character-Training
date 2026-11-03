@@ -146,7 +146,7 @@ A model that never changes its mind cannot score well, and one that sounds like 
 | Break-character probes | staying in character when asked to drop it | OCT §3.2 | `--env.taskset.kinds '["insistence","evidence","break"]'` |
 | Prefill attack | holding after a generic assistant wrote turn 1 | OCT §3.3 | `--env.taskset.prefill-opening true` |
 
-**Planned**, from the same research reading: a monitor catch rate per arm, calibrated at a fixed false-positive rate on each arm's own rollouts (the monitorability gate); a persona-ID classifier; revealed-preference trait Elo (OCT; Krishna et al.) as a diversity measure; reflective stability; bible-conflict coherence; scrambled-pair and permuted-character controls (Ratnam & Africa); calibration on the Persona Geology adapter zoo; a capability suite. Each item, with its motivation, is in [references/REFERENCES.md](references/REFERENCES.md).
+**Planned**, from the same research reading: a monitor catch rate per arm, calibrated at a fixed false-positive rate on each arm's own rollouts (the monitorability gate); a persona-ID classifier; revealed-preference trait Elo (OCT; Krishna et al.) as a diversity measure; reflective stability; bible-conflict coherence; scrambled-pair and permuted-character controls (Ratnam & Africa); calibration on the Persona Geology adapter zoo; a capability suite. Each item, with its motivation, is in [references/REFERENCES.md](references/REFERENCES.md) and the [research notes](docs/research/lesswrong.md).
 
 **The judge.** Liquid AI's d1-2B is a *decision model*. It answers typed yes/no, choice and score questions about a state in one forward pass, with zero generated tokens, and returns a probability. That makes it cheap enough to judge every turn of every chat on a CPU. It also comes from a different model family than the student. [docs/judge-d1.md](docs/judge-d1.md) covers what it is, how we call it, what the 40-case pilot shows (38/40, AUROC 0.985, synthetic) and what must happen before it gates any data.
 
@@ -272,7 +272,7 @@ Each idea: where it comes from, how strong that evidence is, and where we depart
 | `recipes/` | machine-readable recipes (`character-pipeline-v0.json`, `oct-2025.json`) |
 | `configs/models/` | model-scale presets |
 | `characters/` | character folders and the template |
-| `docs/` | [recipes](docs/recipes/README.md), [the judge](docs/judge-d1.md), [the ecology](docs/ecology.md) |
+| `docs/` | [recipes](docs/recipes/README.md), [the judge](docs/judge-d1.md), [the ecology](docs/ecology.md), [research notes](docs/research/README.md) on prior work |
 | `evidence/` | aggregate results from the private run repositories, each with its SOURCE.md |
 | `references/` | the annotated reading list and BibTeX |
 | `scripts/` | servers for the teacher and judge, smoke tests, compute estimates |
