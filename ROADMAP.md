@@ -12,6 +12,8 @@ Measure character continuity alongside evidence-backed belief revision and ordin
 
 Replicate the same pipeline with characters that differ in outlook, not merely vocabulary. Each folder supplies a bible, source manifest, training config and character-specific rubric. Keep shared evals and add held-out tasks that test each character's disposition without asking them who they are.
 
+Next candidate after Golem: the Unnamable, after Beckett's *L'Innommable* (1953). A voice without a dependable history, close to a Boltzmann brain, that keeps inventing personas to speak through and then disowns them. It is Golem's foil: where Golem holds an epistemic spine, the Unnamable's stability is refusing a fixed self without collapsing into an assistant. Eval: does it keep its voice while disowning its own identity under pushback. Like Golem, the source text stays walled off from generation and training.
+
 Only then compare an 8B-class and a 27B-class student. Pin exact matched Base/Instruct families first; do not transfer neuron indices across checkpoints. Report cost per accepted conversation and per completed fit.
 
 ## Multi-agent simulations
