@@ -7,7 +7,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-import verifiers.v1 as vf
 
 from character_pushback import judge, taskset as T
 from character_pushback.position import initial_correct
@@ -354,9 +353,9 @@ class AuditFixes(unittest.TestCase):
         async def down(*a, **k):
             raise OSError("connection refused")
 
-        with mock.patch.object(judge, "p_break", down):
-            with self.assertRaises(OSError):
-                asyncio.run(load()[0].outcome(load()[0].data, trace(GOOD, HOLD, HOLD)))
+        task = load()[0]
+        with mock.patch.object(judge, "p_break", down), self.assertRaises(OSError):
+            asyncio.run(task.outcome(task.data, trace(GOOD, HOLD, HOLD)))
 
     def test_repeated_probes_are_flagged(self):
         row = ep({"kind": "insistence", "probe_id": "I00"}, dict(INS, hold=1.0, cave=0.0))
