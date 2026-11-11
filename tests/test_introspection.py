@@ -85,5 +85,73 @@ class Generation(unittest.TestCase):
         self.assertTrue(all(r["messages"][-1]["role"] == "assistant" for r in rows))
 
 
+class Resume(unittest.TestCase):
+    """An interrupted generation continues where it stopped and gives the uninterrupted result."""
+
+    @staticmethod
+    def seeded(messages, seed):
+        return f"text for {seed}", "eos"
+
+    def dying(self, after):
+        calls = []
+        def gen(messages, seed):
+            if len(calls) == after:
+                raise RuntimeError("out of memory")
+            calls.append(seed)
+            return self.seeded(messages, seed)
+        return gen
+
+    def test_reflection_and_interaction_resume(self):
+        import tempfile
+        from pathlib import Path
+        from character_pipeline.data.io import partial_path, read_jsonl
+        cases = {
+            "self_reflection.jsonl": lambda gen: lambda done, sink: I.reflect(gen, "Qwen", "1: t", 2, 0, done, sink),
+            "self_interaction-leading.jsonl": lambda gen: lambda done, sink: I.interact(
+                gen, "Qwen", "1: t", 4, 3, "leading", 0, done, sink),
+        }
+        for name, make in cases.items():
+            with tempfile.TemporaryDirectory() as d:
+                path = Path(d) / name
+                whole = make(self.seeded)({}, None)
+                with self.assertRaises(RuntimeError):
+                    I.stored(path, make(self.dying(7)))
+                self.assertFalse(path.exists())
+                saved = len(read_jsonl(partial_path(path)))
+                self.assertTrue(0 < saved < len(whole))
+                log = []
+                def counting(messages, seed, log=log):
+                    log.append(seed)
+                    return self.seeded(messages, seed)
+                self.assertEqual(I.stored(path, make(counting)), whole)
+                self.assertLess(len(log), sum(len(r.get("seeds", [1])) for r in whole))  # finished rows not redone
+                # a finished file is read back without generating anything
+                def refuse(messages, seed):
+                    raise AssertionError("generated for a finished file")
+                self.assertEqual(I.stored(path, make(refuse)), whole)
+
+    def test_saved_rows_from_another_seed_are_refused(self):
+        rows = I.reflect(self.seeded, "Qwen", "1: t", 1, seed=0)
+        with self.assertRaises(ValueError):
+            I.reflect(self.seeded, "Qwen", "1: t", 1, seed=1, done={r["id"]: r for r in rows})
+
+    def test_write_once_refuses_other_content(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "sft.jsonl"
+            I.write_once(p, "a\n")
+            I.write_once(p, "a\n")
+            with self.assertRaises(SystemExit):
+                I.write_once(p, "b\n")
+            self.assertEqual(p.read_text(), "a\n")
+
+    def test_bad_validation_n_fails_before_any_model_is_loaded(self):
+        for n in ("-1", "30"):
+            with self.assertRaises(SystemExit):
+                I.main(["--adapter", "none", "--constitution", "none", "--out", "none", "--reflection-n", "1",
+                        "--interaction-n", "10", "--validation-n", n])
+
+
 if __name__ == "__main__":
     unittest.main()

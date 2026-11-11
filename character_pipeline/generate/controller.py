@@ -8,7 +8,7 @@ takes the character's display name instead of hard-coding GOLEM XIV, and
 The weights in `Controller.step` are fixed development assumptions, not
 human-calibrated values (see the inline comment kept from the original).
 """
-import hashlib, json, math, random, re, unicodedata
+import hashlib, math, random, re, unicodedata
 STOP = set("a an the i me my we you your he she it they this that these those and or but to of in on for with by as is are was were be been not do does what how when why someone something there here then have has its at from into than can will".split())
 BUCKETS = [(1,5,.3),(6,20,.3),(25,50,.2),(60,120,.1),(150,300,.1)]
 def words(text):

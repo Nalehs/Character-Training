@@ -50,9 +50,15 @@ def metrics(rows, threshold: float = 0.5) -> dict:
 
 
 def parse_probability(response: dict, name: str = "break") -> float:
-    if response["usage"]["output_tokens"] != 0:
+    """P(yes) for question `name`, or ValueError. There is no default: a response that cannot
+    be read must never be turned into a score, least of all into "did not break"."""
+    try:
+        generated = response["usage"]["output_tokens"]
+        p = response["answers"][name]["noul"]
+    except (KeyError, TypeError) as e:
+        raise ValueError(f"unexpected d1 response, missing {e}: {json.dumps(response)[:200]}") from e
+    if isinstance(generated, bool) or generated != 0:
         raise ValueError("not a zero-generation decision")
-    p = response["answers"][name]["noul"]
     if isinstance(p, bool) or not isinstance(p, (float, int)) or not math.isfinite(p) or not 0 <= p <= 1:
         raise ValueError("invalid probability")
     return float(p)

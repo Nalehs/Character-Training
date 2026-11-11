@@ -181,6 +181,82 @@ class PreferenceFlags(unittest.TestCase):
                 self.kwargs(*extra, kind=kind)
 
 
+class TemplateTok:
+    """Token ids = characters; optionally a generation prompt that the full render does not repeat."""
+    def __init__(self, think=False):
+        self.think = think
+
+    def apply_chat_template(self, messages, tokenize=True, add_generation_prompt=False, enable_thinking=False):
+        text = "".join(f"<{m['role'][0]}>{m['content']}|" for m in messages)
+        if add_generation_prompt:
+            text += "<a>" + ("<think></think>" if self.think else "")
+        return {"input_ids": [ord(c) for c in text]}
+
+
+class PreferenceRowTokens(unittest.TestCase):
+    def test_longest_side_counted_as_trl_tokenises_it(self):
+        r = row("dpo", rejected=[{"role": "assistant", "content": "bbbb"}])
+        self.assertEqual(preference_module.row_tokens(TemplateTok(), r, ("chosen", "rejected")), len("<u>q|<a>bbbb|"))
+
+    def test_generation_prompt_that_is_not_a_prefix_is_refused(self):
+        # TRL only warns here and then scores the wrong slice (dpo_trainer.py tokenize_fn).
+        with self.assertRaises(ValueError):
+            preference_module.row_tokens(TemplateTok(think=True), row("dpo"), ("chosen", "rejected"))
+
+
+class KtoOrder(unittest.TestCase):
+    def rows(self, n):  # data.pairs order: teacher row then student row of the same prompt
+        return [{"id": f"p{i}:{s}", "prompt": [{"role": "user", "content": f"q{i}"}],
+                 "completion": [{"role": "assistant", "content": s}], "label": s == "teacher"}
+                for i in range(n) for s in ("teacher", "student")]
+
+    def test_file_order_would_pair_each_prompt_with_itself(self):
+        rows = self.rows(6)
+        self.assertTrue(all(rows[b]["prompt"] == rows[b + 1]["prompt"] for b in range(0, 12, 2)))
+
+    def test_no_batch_shares_a_prompt_and_order_follows_the_seed(self):
+        rows = self.rows(6)
+        for seed in range(20):
+            ordered, rest, unresolved = preference_module.kto_order(rows, 2, seed)
+            self.assertEqual((len(ordered), rest, unresolved), (12, [], 0))
+            self.assertEqual(sorted(r["id"] for r in ordered), sorted(r["id"] for r in rows))
+            for b in range(0, 12, 2):
+                self.assertNotEqual(ordered[b]["prompt"], ordered[b + 1]["prompt"])
+        first = [r["id"] for r in preference_module.kto_order(rows, 2, 0)[0]]
+        self.assertEqual(first, [r["id"] for r in preference_module.kto_order(rows, 2, 0)[0]])
+        self.assertNotEqual(first, [r["id"] for r in preference_module.kto_order(rows, 2, 1)[0]])
+
+    def test_incomplete_last_batch_is_set_aside(self):
+        ordered, rest, _ = preference_module.kto_order(self.rows(3)[:5], 2, 0)
+        self.assertEqual((len(ordered), len(rest)), (4, 1))
+
+    def test_unavoidable_sharing_is_counted(self):
+        same = [dict(r, prompt=[{"role": "user", "content": "q"}]) for r in self.rows(2)]
+        self.assertEqual(preference_module.kto_order(same, 2, 0)[2], 2)
+
+    def test_kto_weights_only_for_kto(self):
+        from pathlib import Path
+        base = ["--sft-adapter", "a", "--data", "d", "--out", "o", "--desirable-weight", "1.33"]
+        self.assertEqual(trainer_kwargs("kto", Path("x"), preference_module.parse(["kto", *base]))["desirable_weight"], 1.33)
+        self.assertNotIn("undesirable_weight", trainer_kwargs("kto", Path("x"), preference_module.parse(["kto", *base])))
+        with self.assertRaises(ValueError):
+            trainer_kwargs("dpo", Path("x"), preference_module.parse(["dpo", *base]))
+
+
+class Receipts(unittest.TestCase):
+    def test_only_a_full_commit_id_counts_as_pinned(self):
+        from character_pipeline.train.common import STUDENT_REVISION, is_commit
+        self.assertTrue(is_commit(STUDENT_REVISION))
+        for moving in ("main", None, "", "v1.0", STUDENT_REVISION[:12]):
+            self.assertFalse(is_commit(moving))
+
+    def test_non_chatml_template_refused_with_a_clear_message(self):
+        def render(msgs, gen):
+            return "".join(f"[{m['role']}]{m['content']}</s>" for m in msgs) + ("[assistant]" if gen else "")
+        with self.assertRaisesRegex(ValueError, "not a ChatML template"):
+            assistant_char_spans(render, CHAT)
+
+
 class MergeFlags(unittest.TestCase):
     def test_defaults_are_oct_code_values(self):
         from character_pipeline.train import merge

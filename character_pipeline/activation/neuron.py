@@ -3,9 +3,10 @@
 Ported from hdmurder/neurons experiments/evil-qwen/prepare.py (commit ca7fa54).
 A neuron n in layer l is column n of that layer's MLP down-projection. Adding
 dose * median * column/|column| after the FFN residual sum at every token is
-algebraically the same as adding dose to the neuron's activation before the
-down projection, scaled by the layer's published residual-norm median. That
-recipe follows neuronary's calibration. llama.cpp then applies it as
+algebraically the same as adding dose * median / |column| to the neuron's
+activation before the down projection (ignoring any down-projection bias), so
+a dose of 1 moves the residual by one published residual-norm median of that
+layer. That recipe follows neuronary's calibration. llama.cpp then applies it as
 `direction.<l>` with control-vector range l..l.
 
 Indexing: llama.cpp `direction.13` acts on zero-based decoder layer 13, not 14
@@ -48,6 +49,8 @@ def bf16_column(raw: bytes, shape: tuple[int, int], neuron: int):
     """Column `neuron` of a BF16 [hidden, intermediate] tensor given its raw bytes."""
     import numpy as np
     arr = np.frombuffer(raw, dtype="<u2").reshape(shape)
+    if not 0 <= neuron < shape[1]:  # a negative index would silently read from the other end
+        raise IndexError(f"neuron {neuron} is outside the layer's {shape[1]} neurons")
     return (arr[:, neuron].astype(np.uint32) << 16).view(np.float32).copy()
 
 
@@ -81,6 +84,8 @@ def matched_random_neurons(layer_width: int, exclude: set[int], k: int, seed: in
     """Random neuron indices for the matched-dose control."""
     import random
     pool = [i for i in range(layer_width) if i not in exclude]
+    if k > len(pool):
+        raise ValueError(f"asked for {k} control neurons but only {len(pool)} are available")
     return sorted(random.Random(seed).sample(pool, k))
 
 

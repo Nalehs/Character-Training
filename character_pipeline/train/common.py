@@ -17,16 +17,40 @@ here are testable without them.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+import random
+import re
+import sys
 from pathlib import Path
 
 STUDENT = "Qwen/Qwen3.5-4B-Base"
 STUDENT_REVISION = "1001bb4d826a52d1f399e183466143f4da7b741b"
 
 
+END_OF_TURN = "<|im_end|>"  # ChatML end marker; the masks and the sampler's stop token both rely on it
+
+
 def read_jsonl(path) -> list[dict]:
     return [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
+
+
+def seed_everything(seed: int) -> None:
+    """Seed python, numpy (if installed) and torch (CPU and every CUDA device)."""
+    import torch
+    random.seed(seed)
+    try:
+        import numpy
+        numpy.random.seed(seed)
+    except ImportError:  # numpy is not needed by this package itself
+        pass
+    torch.manual_seed(seed)
+
+
+def is_commit(revision) -> bool:
+    """True for a full 40-hex commit id, the only kind of revision that cannot move."""
+    return bool(re.fullmatch(r"[0-9a-f]{40}", str(revision or "")))
 
 
 def lr_factor(update: int, total_updates: int, warmup_fraction: float = 0.05,
@@ -62,8 +86,11 @@ def assistant_char_spans(render, messages: list[dict]) -> list[tuple[int, int]]:
         prefix = render(messages[:i], True)
         if not full.startswith(prefix):
             raise ValueError(f"template is not prefix-stable at message {i}; refusing to guess the mask")
-        end = full.index("<|im_end|>", len(prefix)) + len("<|im_end|>")
-        spans.append((len(prefix), end))
+        at = full.find(END_OF_TURN, len(prefix))
+        if at < 0:
+            raise ValueError(f"no {END_OF_TURN} after assistant message {i}: not a ChatML template; "
+                             "refusing to guess the mask")
+        spans.append((len(prefix), at + len(END_OF_TURN)))
     return spans
 
 
@@ -166,8 +193,33 @@ def supervised_tokens(rows: list[dict]) -> int:
 
 def torch_versions() -> dict:
     import importlib.metadata as md
-    return {k: md.version(k) for k in ("torch", "transformers", "peft", "accelerate")
-            if _installed(k)} | ({"trl": md.version("trl")} if _installed("trl") else {})
+    names = ("torch", "transformers", "peft", "accelerate", "trl", "datasets", "tokenizers", "numpy")
+    return {"python": sys.version.split()[0]} | {k: md.version(k) for k in names if _installed(k)}
+
+
+def model_receipt(tok, model, model_id: str, revision) -> dict:
+    """What was actually loaded: requested and resolved revision, and the chat template's hash.
+
+    `revision_pinned` is False for a branch or tag (e.g. "main"), which can move between runs;
+    `resolved_revision` is the commit transformers reports for the download (None for a local folder).
+    """
+    template = getattr(tok, "chat_template", None)
+    local = Path(str(model_id)).is_dir()
+    if not local and not is_commit(revision):
+        print(f"warning: {model_id} revision {revision!r} is not a commit id; this run is not pinned",
+              file=sys.stderr, flush=True)
+    return {"model": str(model_id), "revision": revision, "revision_pinned": is_commit(revision),
+            "local_model_dir": local,
+            "resolved_revision": getattr(getattr(model, "config", None), "_commit_hash", None),
+            "chat_template_sha256": hashlib.sha256(template.encode()).hexdigest() if isinstance(template, str) else None}
+
+
+def lora_receipt(model, adapter: str = "default") -> dict:
+    """The LoRA settings in force on a PeftModel (not the CLI flags, which a loaded adapter overrides)."""
+    c = model.peft_config[adapter]
+    targets = c.target_modules
+    return {"r": c.r, "alpha": c.lora_alpha, "dropout": c.lora_dropout, "use_rslora": bool(getattr(c, "use_rslora", False)),
+            "target_modules": len(targets) if not isinstance(targets, str) else targets}
 
 
 def _installed(name: str) -> bool:

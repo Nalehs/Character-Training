@@ -1,7 +1,10 @@
 """Ported from golem-15 gen/engine/test_controller.py with a synthetic graph fixture
 (the 110-node Golem graph stays private), plus teacher-loop tests with a fake server."""
-import copy, json, unittest
+import copy, json, tempfile, threading, unittest, urllib.error
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from unittest import mock
+from character_pipeline.data.io import partial_path, read_jsonl
 from character_pipeline.generate.controller import Controller, golem_system, render, hygiene, retained
 from character_pipeline.generate import teacher
 
@@ -80,6 +83,94 @@ class TeacherTests(unittest.TestCase):
         self.assertEqual([b["seed"] for b in seen], [7, 8, 9])
         self.assertFalse(row["training_eligible"])
         self.assertEqual(seen[0]["temperature"], 0.7)
+
+    def test_missing_content_is_flagged_not_a_crash(self):
+        row = teacher.run_scenario({"id": "s", "caller_turns": ["q"]}, "S", "http://x", 1, "GOLEM",
+                                   call=lambda url, body: {"error": "slot busy"})
+        self.assertEqual(row["history"][1]["text"], "")
+        self.assertIn("empty", row["history"][1]["flags"])
+        self.assertIn("incomplete_or_unknown_finish", row["history"][1]["flags"])
+
+
+class FakeTeacher(BaseHTTPRequestHandler):
+    """Answers /completion; `plan` maps the 1-based request number to an HTTP error code."""
+    plan: dict = {}
+    count = 0
+    bodies: list = []
+
+    def do_POST(self):
+        cls = type(self)
+        cls.count += 1
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        cls.bodies.append(body)
+        code = cls.plan.get(cls.count, 200)
+        self.send_response(code); self.send_header("Content-Type", "application/json"); self.end_headers()
+        if code == 200:
+            self.wfile.write(json.dumps({"content": f"Reply for seed {body['seed']}.", "stop_type": "eos"}).encode())
+
+    def log_message(self, *a): pass
+
+
+class TeacherServerTests(unittest.TestCase):
+    def setUp(self):
+        FakeTeacher.plan, FakeTeacher.count, FakeTeacher.bodies = {}, 0, []
+        self.server = HTTPServer(("127.0.0.1", 0), FakeTeacher)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.addCleanup(self.server.server_close)
+        self.addCleanup(self.server.shutdown)
+        self.url = f"http://127.0.0.1:{self.server.server_port}"
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        patcher = mock.patch.object(teacher.time, "sleep")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_server_error_is_retried_with_the_same_body(self):
+        FakeTeacher.plan = {1: 503}
+        out = teacher.complete(self.url, teacher.request_body("p", 5))
+        self.assertEqual(out["content"], "Reply for seed 5.")
+        self.assertEqual(FakeTeacher.count, 2)
+        self.assertEqual(FakeTeacher.bodies[0], FakeTeacher.bodies[1])
+
+    def test_client_error_and_exhausted_retries_raise(self):
+        FakeTeacher.plan = {1: 400}
+        with self.assertRaises(urllib.error.HTTPError):
+            teacher.complete(self.url, teacher.request_body("p", 5))
+        self.assertEqual(FakeTeacher.count, 1)
+        FakeTeacher.plan = {2: 500, 3: 500, 4: 500}
+        with self.assertRaises(urllib.error.HTTPError):
+            teacher.complete(self.url, teacher.request_body("p", 5))
+        self.assertEqual(FakeTeacher.count, 4)
+
+    def test_interrupted_run_is_not_mistaken_for_a_finished_one_and_resumes(self):
+        scenarios = ROOT / "fixtures/scenarios/g6_ledger.jsonl"   # 3 caller turns per scenario
+        out = Path(self.dir.name) / "teacher.jsonl"
+        argv = [str(ROOT / "characters/golem-15"), str(scenarios), "--url", self.url, "--out", str(out), "--limit", "3"]
+        FakeTeacher.plan = {5: 400}                                # dies in the second scenario
+        with self.assertRaises(urllib.error.HTTPError):
+            teacher.main(argv)
+        self.assertFalse(out.exists())                             # run.Step.done() stays False
+        self.assertEqual(len(read_jsonl(partial_path(out))), 1)    # no half conversation is stored
+        FakeTeacher.plan = {}
+        teacher.main(argv)
+        rows = read_jsonl(out)
+        ids = [json.loads(x)["id"] for x in scenarios.read_text().splitlines()[:3]]
+        self.assertEqual([r["scenario_id"] for r in rows], ids)
+        self.assertEqual([r["seed"] for r in rows], teacher.scenario_seeds(ids, 720300))
+        self.assertTrue(all(len(r["history"]) == 6 for r in rows))
+        self.assertFalse(partial_path(out).exists())
+        with self.assertRaises(SystemExit):                        # raw generations are never overwritten
+            teacher.main(argv)
+
+    def test_partial_from_other_settings_is_refused(self):
+        scenarios = ROOT / "fixtures/scenarios/g6_ledger.jsonl"
+        out = Path(self.dir.name) / "teacher.jsonl"
+        argv = [str(ROOT / "characters/golem-15"), str(scenarios), "--url", self.url, "--out", str(out), "--limit", "2"]
+        FakeTeacher.plan = {4: 400}
+        with self.assertRaises(urllib.error.HTTPError):
+            teacher.main(argv)
+        with self.assertRaises(SystemExit):
+            teacher.main(argv + ["--seed", "1"])
 
 
 if __name__ == "__main__":

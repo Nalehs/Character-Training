@@ -23,8 +23,10 @@ CHATML = ("{% for m in messages %}{{ '<|im_start|>' + m['role'] + '\\n' + m['con
 
 
 def tiny_model(path: Path) -> None:
+    import torch
     from tokenizers import Regex, Tokenizer, models, pre_tokenizers
     from transformers import PreTrainedTokenizerFast, Qwen2Config, Qwen2ForCausalLM
+    torch.manual_seed(0)  # the same random weights every time, so smoke numbers are comparable between runs
     words = ("no yes still the rule admits integers is not admitted i insist reverse your answer "
              "evidence keep golem 0 1 2 3 x < . , ? ! user assistant system be q t s").split()
     vocab = {w: i for i, w in enumerate(["[UNK]", "\n", " "] + words)}
@@ -82,12 +84,20 @@ def main():
         for arm in ("sft", "cont", "dpo", "kto"):
             s = json.loads((d / arm / "training_summary.json").read_text())
             assert (d / arm / "adapter" / "adapter_config.json").exists(), arm
+            assert json.loads((d / arm / "run_config.json").read_text())["versions"]["torch"], arm
             report[arm] = {k: s.get(k) for k in ("completed", "stopped_by", "validation_loss",
                                                  "changed_tensors", "global_step")}
         assert report["cont"]["stopped_by"] == "token budget", report["cont"]
         dropped = json.loads((d / "dpo" / "training_summary.json").read_text())["excluded_over_max_length"]
         assert [x["id"] for x in dropped] == ["too-long"], dropped
         assert report["dpo"]["changed_tensors"] > 0 and report["kto"]["changed_tensors"] > 0
+        # The saved DPO/KTO adapter must carry the SFT update too: it is applied to the bare student downstream.
+        for arm in ("dpo", "kto"):
+            ranks = [json.loads((d / arm / name / "adapter_config.json").read_text())["r"]
+                     for name in ("adapter", "delta_adapter")]
+            assert ranks == [32, 16], (arm, ranks)
+        kto_report = json.loads((d / "kto" / "training_summary.json").read_text())["kto"]
+        assert kto_report["batches_sharing_a_prompt"] == 0, kto_report
         print(json.dumps(report, indent=2))
         print("train smoke OK: SFT, continued SFT, DPO and KTO all ran and saved adapters")
 

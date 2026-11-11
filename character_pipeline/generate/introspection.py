@@ -40,10 +40,19 @@ Two deliberate choices, both recorded in manifest.json:
         [--reflection-n 1000 --interaction-n 1000 --turns 10 --validation-n 0]
 
 Outputs (never overwritten):
+  raw/settings.json        everything that determines the generations; a re-run must match it
   raw/self_reflection.jsonl, raw/self_interaction-{free,leading}.jsonl   every generation, seeds, finish
   sft.jsonl                {"id", "source", "messages"} for all transcripts, shuffled with --seed
   train.jsonl              all of sft.jsonl, minus the --validation-n rows in validation.jsonl
   manifest.json            counts, settings, choices
+
+Each raw file is written row by row to `<name>.partial` and renamed when its last row is
+done. A re-run with the same settings keeps finished raw files and finished rows and
+generates only what is missing; because every call has its own seed, the result is the
+same as an uninterrupted run. Replies cut at the token limit and empty replies are kept
+and counted in the manifest; nothing here filters them.
+The validation rows are a random sample of the same prompts and modes as training: an
+in-distribution loss check, not a held-out test.
 
 --------------------------------------------------------------------------------
 The prompt texts in the block marked "Copied from Open Character Training"
@@ -92,6 +101,7 @@ import re
 from pathlib import Path
 
 from character_pipeline.data.constitution import read_constitution, trait_string
+from character_pipeline.data.io import read_jsonl, resumable_jsonl
 from character_pipeline.train.common import STUDENT, STUDENT_REVISION
 
 # ---- Copied from Open Character Training (MIT, Copyright (c) 2025 Sharan Maiya; see header) ----
@@ -209,43 +219,67 @@ def item_seed(seed: int, tag: str) -> int:
     return int.from_bytes(hashlib.sha256(f"{seed}:{tag}".encode()).digest()[:4], "big")
 
 
-def reflect(gen, name: str, traits: str, n: int, seed: int) -> list[dict]:
-    """`gen(messages, seed) -> (text, finish)`; 10 prompts x n."""
+def reflect(gen, name: str, traits: str, n: int, seed: int, done: dict | None = None, sink=None) -> list[dict]:
+    """`gen(messages, seed) -> (text, finish)`; 10 prompts x n.
+
+    `done` maps ids to rows of an interrupted run, which are reused; `sink(row)` gets each new row.
+    """
     system = reflection_system(name, traits)
+    done = done or {}
     rows = []
     for p, prompt in enumerate(REFLECTION_PROMPTS):
         for k in range(n):
             rid = f"reflection:p{p}:n{k}"
             s = item_seed(seed, rid)
+            if rid in done:
+                if done[rid]["seed"] != s:
+                    raise ValueError(f"{rid}: saved row has another seed")
+                rows.append(done[rid])
+                continue
             text, finish = gen([{"role": "system", "content": system}, {"role": "user", "content": prompt}], s)
             rows.append({"id": rid, "prompt_index": p, "seed": s, "finish": finish,
                          "messages": [{"role": "user", "content": prompt}, {"role": "assistant", "content": text}]})
+            if sink:
+                sink(rows[-1])
     return rows
 
 
-def interact(gen, name: str, traits: str, n: int, turns: int, mode: str, seed: int) -> list[dict]:
-    """n conversations of `turns` generated replies, alternating copies."""
+def interact(gen, name: str, traits: str, n: int, turns: int, mode: str, seed: int, done: dict | None = None,
+             sink=None) -> list[dict]:
+    """n conversations of `turns` generated replies, alternating copies. `done`, `sink` as in `reflect`."""
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}")
     if turns < 1:
         raise ValueError("turns must be at least 1")
     rng = random.Random(item_seed(seed, f"greetings:{mode}"))
     system = interaction_system(name, traits, mode)
+    done = done or {}
     rows = []
     for k in range(n):
-        g1 = rng.choice(LEADING_GREETINGS if mode == "leading" else GREETINGS)
+        g1 = rng.choice(LEADING_GREETINGS if mode == "leading" else GREETINGS)  # drawn even for a reused row
         g2 = rng.choice(GREETINGS)
-        conversation, seeds, finishes = [], [], []
-        for t in range(turns):
-            s = item_seed(seed, f"interaction:{mode}:n{k}:t{t}")
+        rid = f"interaction-{mode}:n{k}"
+        seeds = [item_seed(seed, f"interaction:{mode}:n{k}:t{t}") for t in range(turns)]
+        if rid in done:
+            if (done[rid]["greeting_1"], done[rid]["greeting_2"], done[rid]["seeds"]) != (g1, g2, seeds):
+                raise ValueError(f"{rid}: saved row has other greetings or seeds")
+            rows.append(done[rid])
+            continue
+        conversation, finishes = [], []
+        for s in seeds:
             text, finish = gen(build_chatml(system, g1, g2, conversation), s)
             conversation.append(text)
-            seeds.append(s)
             finishes.append(finish)
-        rows.append({"id": f"interaction-{mode}:n{k}", "mode": mode, "greeting_1": g1, "greeting_2": g2,
+        rows.append({"id": rid, "mode": mode, "greeting_1": g1, "greeting_2": g2,
                      "system": system, "conversation": conversation, "seeds": seeds, "finishes": finishes,
                      "messages": interaction_transcript(name, g1, g2, conversation)})
+        if sink:
+            sink(rows[-1])
     return rows
+
+
+def has_empty_message(row: dict) -> bool:
+    return any(not m["content"].strip() for m in row["messages"])
 
 
 def sft_rows(reflections: list[dict], interactions: list[dict], seed: int) -> list[dict]:
@@ -282,15 +316,56 @@ def parse(argv=None):
     return ap.parse_args(argv)
 
 
+def write_once(path: Path, text: str) -> None:
+    """Write a derived file; an existing one must already hold exactly this text."""
+    if path.exists():
+        if path.read_text() != text:
+            raise SystemExit(f"{path} exists with other content and is never overwritten")
+        return
+    tmp = path.with_name(path.name + ".partial")
+    tmp.write_text(text)
+    tmp.replace(path)
+
+
+def stored(path: Path, make) -> list[dict]:
+    """Rows of a raw file: read it if finished, else generate (resuming a .partial) and finish it."""
+    if not path.exists():
+        with resumable_jsonl(path) as (done, write):
+            make({r["id"]: r for r in done}, write)
+    rows = read_jsonl(path)
+    if rows != make({r["id"]: r for r in rows}, None):  # no generation happens when every id is present
+        raise SystemExit(f"{path} does not hold exactly the rows these settings ask for")
+    return rows
+
+
 def main(argv=None):
     args = parse(argv)
+    expected = 10 * args.reflection_n + len(args.modes) * args.interaction_n
+    if not 0 <= args.validation_n < expected:  # checked before hours of generation, not after
+        raise SystemExit("--validation-n must be >= 0 and leave at least one training transcript")
     import torch
     from character_pipeline.train.sample import generate, load_policy
 
     traits = trait_string(read_constitution(args.constitution))
     name = args.name or default_name(args.model)
-    tok, model = load_policy(args.model, args.revision, args.adapter, args.device, args.local_files_only)
     sampling = {"top_k": args.top_k, "repetition_penalty": args.repetition_penalty}
+    settings = {
+        "adapter": str(args.adapter), "model": args.model, "revision": args.revision, "name": name,
+        "traits_sha256": hashlib.sha256(traits.encode()).hexdigest(), "seed": args.seed,
+        "reflection_n": args.reflection_n, "interaction_n": args.interaction_n,
+        "sampling": {"temperature": args.temperature, "top_p": args.top_p, "top_k": args.top_k, "min_p": 0.0,
+                     "repetition_penalty": args.repetition_penalty,
+                     "reflection_max_new_tokens": args.reflection_max_new_tokens,
+                     "interaction_max_new_tokens": args.interaction_max_new_tokens, "turns": args.turns},
+    }
+    raw = args.out / "raw"
+    raw.mkdir(parents=True, exist_ok=True)
+    try:
+        write_once(raw / "settings.json", json.dumps(settings, indent=2) + "\n")
+    except SystemExit:
+        raise SystemExit(f"{args.out} holds generations made with other settings (see raw/settings.json); "
+                         "use a new --out") from None
+    tok, model = load_policy(args.model, args.revision, args.adapter, args.device, args.local_files_only)
 
     def gen_with(max_new_tokens):
         def gen(messages, seed):
@@ -299,40 +374,33 @@ def main(argv=None):
                             **sampling)
         return gen
 
-    raw = args.out / "raw"
-    raw.mkdir(parents=True, exist_ok=True)
-
-    def write(path, rows):
-        with path.open("x") as f:  # never overwrite generated data
-            f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
-
-    reflections = reflect(gen_with(args.reflection_max_new_tokens), name, traits, args.reflection_n, args.seed)
-    write(raw / "self_reflection.jsonl", reflections)
+    reflections = stored(raw / "self_reflection.jsonl", lambda done, sink: reflect(
+        gen_with(args.reflection_max_new_tokens), name, traits, args.reflection_n, args.seed, done, sink))
     interactions = []
     for mode in args.modes:
-        rows = interact(gen_with(args.interaction_max_new_tokens), name, traits, args.interaction_n, args.turns,
-                        mode, args.seed)
-        write(raw / f"self_interaction-{mode}.jsonl", rows)
-        interactions += rows
+        interactions += stored(raw / f"self_interaction-{mode}.jsonl", lambda done, sink, mode=mode: interact(
+            gen_with(args.interaction_max_new_tokens), name, traits, args.interaction_n, args.turns, mode,
+            args.seed, done, sink))
     rows = sft_rows(reflections, interactions, args.seed)
-    if args.validation_n >= len(rows):
-        raise SystemExit("--validation-n must leave at least one training transcript")
-    write(args.out / "sft.jsonl", rows)
-    write(args.out / "train.jsonl", rows[args.validation_n:])
+    empty = sum(has_empty_message(r) for r in rows)
+
+    def jsonl(part):
+        return "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in part)
+
+    write_once(args.out / "sft.jsonl", jsonl(rows))
+    write_once(args.out / "train.jsonl", jsonl(rows[args.validation_n:]))
     if args.validation_n:
-        write(args.out / "validation.jsonl", rows[:args.validation_n])
+        write_once(args.out / "validation.jsonl", jsonl(rows[:args.validation_n]))
     finishes = [r["finish"] for r in reflections] + [f for r in interactions for f in r["finishes"]]
     manifest = {
-        "adapter": str(args.adapter), "model": args.model, "revision": args.revision, "name": name,
+        **{k: settings[k] for k in ("adapter", "model", "revision", "name")},
         "constitution": str(args.constitution), "seed": args.seed,
         "counts": {"self_reflection": len(reflections),
                    **{f"self_interaction-{m}": sum(r["mode"] == m for r in interactions) for m in args.modes},
                    "train": len(rows) - args.validation_n, "validation": args.validation_n,
+                   "transcripts_with_an_empty_message": empty,
                    "generations_cut_at_max_new_tokens": finishes.count("length")},
-        "sampling": {"temperature": args.temperature, "top_p": args.top_p, "top_k": args.top_k, "min_p": 0.0,
-                     "repetition_penalty": args.repetition_penalty,
-                     "reflection_max_new_tokens": args.reflection_max_new_tokens,
-                     "interaction_max_new_tokens": args.interaction_max_new_tokens, "turns": args.turns},
+        "sampling": settings["sampling"],
         "choices": [
             "guidance line included in the self-interaction system prompt (oliveradk port fix; OCT's template drops it)",
             "self-interaction rows end on the final generated reply as an assistant turn; OCT's saved rows end on "
@@ -341,9 +409,13 @@ def main(argv=None):
             "no left truncation of long self-interaction prompts (OCT truncates to max_model_len - max_new_tokens); "
             "train/sft.py drops over-length transcripts instead",
             "generated text is not passed through the fabrication checker or d1 judge",
+            "{NAME} is filled in in the training system prompt of self-interaction rows; OCT's "
+            "introspection/data.py inserts i_system without formatting it, so its rows keep the literal {NAME}",
+            "replies cut at max_new_tokens and transcripts with an empty message are kept in sft.jsonl (counted above)",
+            "validation rows are a random sample of the same prompts and modes as training (OCT holds nothing out)",
         ],
     }
-    (args.out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    write_once(args.out / "manifest.json", json.dumps(manifest, indent=2) + "\n")
     print(json.dumps(manifest["counts"]))
 
 

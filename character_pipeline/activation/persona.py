@@ -7,11 +7,17 @@ pilot's `Student` class so they take any decoder stack:
 
 - `response_means`: hook every decoder block, average the block output over the
   response tokens only (not the prompt), per layer.
-- `direction`: mean over pairs of (character response - assistant response).
+- `direction`: mean over pairs of (character response - assistant response),
+  per layer. It is not normalised; `steer` adds coef * direction as it is.
 - `steer`: add coef * direction to the last position of one block on each
   forward pass during generation (`add_last`).
 - `projection`: (response mean - assistant-side centre) . unit direction,
   the pilot's monitor.
+- `random_control`: a random direction with the same norm per layer.
+- `label_flip_signs`: balanced +1/-1 signs for a label-shuffle control. Multiply
+  each pair difference by its sign before `direction`. Re-pairing the two sides
+  (`shuffled_pairs`) is NOT a control: the mean difference does not depend on
+  which negative each positive is paired with.
 
 On Aineko 0.8B (evidence/persona-vector-pilot) no steering coefficient produced
 an in-character conversation (0/20 at every coefficient, as for the random
@@ -39,6 +45,8 @@ def response_means(backbone, layers, prefix_ids: list[int], response_ids: list[i
     import torch
     if not response_ids:
         raise ValueError("empty response cannot be averaged")
+    if not prefix_ids:
+        raise ValueError("empty prefix: there is no last prompt token to read")
     ids = prefix_ids + response_ids
     captures, handles = {}, []
 
@@ -104,13 +112,34 @@ class steer:
 
 
 def projection(response_mean, centre, vector) -> float:
-    """Pilot monitor: distance along the unit direction from the assistant-side centre."""
+    """Pilot monitor: distance along the unit direction from the assistant-side centre.
+
+    All three are one layer's [hidden] vectors; index the [n_layers, hidden] stacks first.
+    """
+    if vector.dim() != 1:
+        raise ValueError("projection takes one layer's vector, e.g. v[11], not the per-layer stack")
     u = vector / vector.norm()
     return float((response_mean - centre) @ u)
 
 
 def shuffled_pairs(n: int, seed: int = 0) -> list[int]:
-    """Permutation for a label-shuffle control (pair sides swapped at random)."""
+    """A seeded permutation of pair indices, for re-pairing positives with other negatives.
+
+    Not a label-shuffle control for `direction`: mean(pos[i] - neg[perm[i]]) equals
+    mean(pos) - mean(neg) for every permutation. Use `label_flip_signs` for that.
+    """
     order = list(range(n))
     random.Random(seed).shuffle(order)
     return order
+
+
+def label_flip_signs(n: int, seed: int = 0) -> list[int]:
+    """Balanced +1/-1 signs (half the pairs have their two sides swapped) for a label-shuffle control.
+
+    `direction(sign * diff for sign, diff in zip(signs, differences))` is the direction you would get
+    if the character/assistant labels carried no information; compare its norm and its steering
+    effect with the real direction's.
+    """
+    signs = [1] * (n - n // 2) + [-1] * (n // 2)
+    random.Random(seed).shuffle(signs)
+    return signs

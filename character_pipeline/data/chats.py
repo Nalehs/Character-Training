@@ -3,7 +3,8 @@
 For recipes without a human-review gate (Open Character Training's stage 3-5
 path), this converts `generate.teacher` output into `{"id", "messages"}` rows
 that `train.sample` and `data.pairs` accept. A turn is dropped if it carries a
-mechanical flag from generation (empty, incomplete, role markers) or, with
+mechanical flag from generation (empty, incomplete or unknown finish, role
+markers; the whole conversation is dropped, not just the turn) or, with
 `--require-final-punct`, if it does not end in punctuation (OCT's truncation
 filter, distillation/data.py:15-18).
 
@@ -19,7 +20,11 @@ import json
 import unicodedata
 from pathlib import Path
 
-DROP_FLAGS = {"empty", "incomplete", "role_marker", "role_or_think_marker"}
+from character_pipeline.data.io import read_jsonl
+
+# generate.teacher writes "incomplete_or_unknown_finish" (it drops controller.hygiene's own
+# "incomplete"); both spellings are listed so that a truncated reply is never kept.
+DROP_FLAGS = {"empty", "incomplete", "incomplete_or_unknown_finish", "role_marker", "role_or_think_marker"}
 
 
 def ends_in_punctuation(text: str) -> bool:
@@ -57,7 +62,7 @@ def main(argv=None):
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--require-final-punct", action="store_true")
     args = ap.parse_args(argv)
-    rows = [json.loads(x) for x in args.teacher_output.read_text().splitlines() if x.strip()]
+    rows = read_jsonl(args.teacher_output)
     chats, dropped = convert(rows, args.require_final_punct)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text("".join(json.dumps(c, ensure_ascii=False) + "\n" for c in chats))

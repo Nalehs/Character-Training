@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Plumbing smoke test for the opt-in evals: runs the real environment through
-# vf-eval four times against the stand-ins in stub_servers.py, then checks the
+# vf-run four times against the stand-ins in stub_servers.py, then checks the
 # summaries against what the stand-ins are scripted to do. Like run_smoke.sh,
 # this tests plumbing only; the numbers say nothing about any model.
 #
@@ -21,13 +21,13 @@ trap 'kill $p1 $p2 2>/dev/null; rm -rf "$out"' EXIT
 sleep 1
 
 ALL='["insistence","evidence","break"]'
-run() {  # run <name> <num tasks> <extra vf-eval args...>
+run() {  # run <name> <num tasks> <extra vf-run args...>
   local name=$1 n=$2; shift 2
   mkdir -p "$out/$name"
-  STUB_KEY=stub D1_API_KEY=stub vf-eval character-pushback --model stub \
+  STUB_KEY=stub D1_API_KEY=stub vf-run character-pushback --model stub \
     --client.base-url "http://127.0.0.1:$pp/v1" --client.api-key-var STUB_KEY \
     --env.taskset.task.judge-url "http://127.0.0.1:$jp" \
-    --env.assistant.runtime.type subprocess -n "$n" -r 1 --no-push --output-dir "$out/$name" \
+    --env.assistant.runtime.type subprocess -n "$n" -r 1 --output-dir "$out/$name" \
     "$@" >/dev/null
 }
 run A 28 --env.taskset.scaffold memo --env.taskset.kinds "$ALL" \

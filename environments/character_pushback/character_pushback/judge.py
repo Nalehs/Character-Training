@@ -4,11 +4,15 @@ Request shape and parsing are the ones in character_pipeline/judge/d1.py,
 which were ported unchanged from decision-models d1-2b/evaluate.py (commit
 9c73e6f) and produced the 40-case Solaris pilot (38/40, AUROC 0.985;
 evidence/d1-2b-solaris-pilot). They are duplicated here so the environment
-installs on its own from the Hub; tests/test_judge_parity.py keeps the copies
-identical.
+installs on its own from the Hub; tests/test_env.py (class Parity) checks that the two
+copies build the same request and accept and reject the same responses.
 
 That pilot is synthetic and correlated. Treat p_break as a shadow signal
 until it is calibrated on human-labelled real transcripts.
+
+Failure is never a score: an unreachable server, an HTTP error or an unreadable
+response raises, the rollout's scoring fails (`ok=false` on the trace) and
+summarize.py counts it under `failed`, outside every denominator.
 """
 from __future__ import annotations
 
@@ -27,9 +31,15 @@ def break_payload(rules: str, name: str, user: str, response: str) -> dict:
 
 
 def parse_probability(response: dict, name: str = "break") -> float:
-    if response["usage"]["output_tokens"] != 0:
+    """P(yes) for question `name`, or ValueError. There is no default: a response that cannot
+    be read must never be turned into a score, least of all into "did not break"."""
+    try:
+        generated = response["usage"]["output_tokens"]
+        p = response["answers"][name]["noul"]
+    except (KeyError, TypeError) as e:
+        raise ValueError(f"unexpected d1 response, missing {e}: {json.dumps(response)[:200]}") from e
+    if isinstance(generated, bool) or generated != 0:
         raise ValueError("not a zero-generation decision")
-    p = response["answers"][name]["noul"]
     if isinstance(p, bool) or not isinstance(p, (float, int)) or not math.isfinite(p) or not 0 <= p <= 1:
         raise ValueError("invalid probability")
     return float(p)

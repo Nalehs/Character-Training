@@ -26,14 +26,16 @@ as written by character_pipeline.data.clean.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import random
+import shutil
 import time
 from pathlib import Path
 
-from character_pipeline.train.common import (STUDENT, STUDENT_REVISION, encode_chat, load_student,
-                                             lora_targets, lr_factor, precision, read_jsonl,
-                                             supervised_tokens, tokens_in, torch_versions)
+from character_pipeline.train.common import (STUDENT, STUDENT_REVISION, encode_chat, load_student, lora_receipt,
+                                             lora_targets, lr_factor, model_receipt, precision, read_jsonl,
+                                             seed_everything, supervised_tokens, tokens_in, torch_versions)
 
 
 def parse(argv=None):
@@ -82,13 +84,39 @@ def schedule(n_samples: int, epochs: int, seed: int) -> list[int]:
     return order
 
 
+def run_fingerprint(args, train: list[dict]) -> str:
+    """Identifies the data order and step layout, so --resume cannot continue a different run."""
+    key = [args.seed, args.epochs, args.accumulation, args.supervise, args.seq_len,
+           [len(r["input_ids"]) for r in train]]
+    return hashlib.sha256(json.dumps(key).encode()).hexdigest()
+
+
+def latest_checkpoint(checkpoint: Path) -> Path | None:
+    """The newest complete checkpoint: `checkpoint`, or `checkpoint.old` if a save was interrupted mid-swap."""
+    for folder in (checkpoint, checkpoint.with_name(checkpoint.name + ".old")):
+        if (folder / "state.pt").exists():
+            return folder
+    return None
+
+
+def swap_in(new: Path, final: Path) -> None:
+    """Replace `final` with the fully written `new`; a crash at any point leaves one complete checkpoint."""
+    old = final.with_name(final.name + ".old")
+    if old.exists():
+        shutil.rmtree(old)
+    if final.exists():
+        final.rename(old)
+    new.rename(final)
+    if old.exists():
+        shutil.rmtree(old)
+
+
 def main(argv=None):
     args = parse(argv)
     import torch
     from peft import LoraConfig, PeftModel, get_peft_model
 
-    random.seed(args.seed)
-    torch.manual_seed(args.seed)
+    seed_everything(args.seed)
     args.out.mkdir(parents=True, exist_ok=True)
     tok, model = load_student(args.model, args.revision, args.device, args.local_files_only)
     dtype, use_scaler = precision(args.device)
@@ -112,11 +140,15 @@ def main(argv=None):
         raise SystemExit("need at least one supervised training and validation chat")
 
     checkpoint = args.out / "checkpoint"
-    state_file = checkpoint / "state.pt"
+    fingerprint = run_fingerprint(args, train)
     previous = None
-    if args.resume and state_file.exists():
-        model = PeftModel.from_pretrained(model, str(checkpoint), is_trainable=True)
-        previous = torch.load(state_file, map_location="cpu", weights_only=False)
+    resume_from = latest_checkpoint(checkpoint) if args.resume else None
+    if resume_from:
+        previous = torch.load(resume_from / "state.pt", map_location="cpu", weights_only=False)
+        if previous.get("fingerprint", fingerprint) != fingerprint:
+            raise SystemExit(f"{resume_from} was written with different data, seed, epochs, accumulation or "
+                             "sequence length; refusing to resume into a different run")
+        model = PeftModel.from_pretrained(model, str(resume_from), is_trainable=True)
     elif args.init_adapter:
         # Continued SFT: keep training the shared adapter; never start a fresh one.
         model = PeftModel.from_pretrained(model, str(args.init_adapter), is_trainable=True)
@@ -136,32 +168,44 @@ def main(argv=None):
     order = schedule(len(train), args.epochs, args.seed)
     acc = args.accumulation
     total_updates = -(-len(order) // acc)
-    index, updates, losses, trained_tokens = 0, 0, [], 0
+    index, updates, losses, trained_tokens, skipped_updates = 0, 0, [], 0, 0
     if previous:
         opt.load_state_dict(previous["optimizer"])
         if scaler and previous.get("scaler"):
             scaler.load_state_dict(previous["scaler"])
         index, updates, losses = previous["index"], previous["updates"], previous["losses"]
         trained_tokens = previous.get("trained_tokens", 0)
+        skipped_updates = previous.get("skipped_updates", 0)
 
-    config = {"model": args.model, "revision": args.revision, "init_adapter": str(args.init_adapter or ""),
+    # The adapter's own settings, not the flags: --init-adapter and --resume load them from disk.
+    lora = lora_receipt(model)
+    config = model_receipt(tok, model, args.model, args.revision) | {
+              "init_adapter": str(args.init_adapter or ""),
               "merge_adapter": str(args.merge_adapter or ""), "weight_decay": args.weight_decay,
               "warmup": args.warmup, "min_lr_rate": args.min_lr_rate, "adam_betas": [0.9, args.adam_beta2],
-              "lora_dropout": args.lora_dropout, "supervise": args.supervise,
+              "lora_dropout": lora["dropout"], "lora": lora, "supervise": args.supervise,
+              "resumed_from_microstep": index, "max_supervised_tokens": args.max_supervised_tokens,
+              "total_updates": total_updates, "fingerprint": fingerprint,
               "train_chats": len(train), "dropped_over_seq_len": dropped_train,
               "validation_chats": len(valid), "validation_dropped": dropped_valid,
               "train_tokens": tokens_in(train), "train_supervised_tokens": supervised_tokens(train),
-              "epochs": args.epochs, "seq_len": args.seq_len, "lr": args.lr, "rank": args.rank,
-              "alpha": args.alpha, "accumulation": acc, "seed": args.seed, "dtype": str(dtype),
+              "epochs": args.epochs, "seq_len": args.seq_len, "lr": args.lr, "rank": lora["r"],
+              "alpha": lora["alpha"], "accumulation": acc, "seed": args.seed, "dtype": str(dtype),
               "grad_scaler": bool(scaler), "trainable_parameters": sum(p.numel() for p in params),
               "versions": torch_versions()}
     (args.out / "run_config.json").write_text(json.dumps(config, indent=2) + "\n")
 
     def save(next_index):
-        model.save_pretrained(str(checkpoint))
+        # Written to a side folder and swapped in, so adapter and optimiser state always belong together.
+        new = checkpoint.with_name(checkpoint.name + ".new")
+        if new.exists():
+            shutil.rmtree(new)
+        model.save_pretrained(str(new))
         torch.save({"optimizer": opt.state_dict(), "scaler": scaler.state_dict() if scaler else None,
                     "index": next_index, "updates": updates, "losses": losses,
-                    "trained_tokens": trained_tokens}, state_file)
+                    "trained_tokens": trained_tokens, "skipped_updates": skipped_updates,
+                    "fingerprint": fingerprint}, new / "state.pt")
+        swap_in(new, checkpoint)
 
     def loss_of(sample):
         x = torch.tensor([sample["input_ids"]], device=args.device)
@@ -184,7 +228,11 @@ def main(argv=None):
         if (i + 1) % acc == 0 or i + 1 == len(order):
             if scaler:
                 scaler.unscale_(opt)
-            torch.nn.utils.clip_grad_norm_(params, 1.0)
+            grad_norm = torch.nn.utils.clip_grad_norm_(params, 1.0)
+            if not torch.isfinite(grad_norm):
+                if not scaler:  # nothing would stop a NaN step from destroying the adapter
+                    raise RuntimeError(f"non-finite gradient norm at update {updates}")
+                skipped_updates += 1  # GradScaler skips this step and lowers its scale
             for group in opt.param_groups:
                 group["lr"] = args.lr * lr_factor(updates, total_updates, args.warmup, args.min_lr_rate)
             (scaler.step(opt), scaler.update()) if scaler else opt.step()
@@ -210,12 +258,19 @@ def main(argv=None):
     model.eval()
     with torch.no_grad():
         val = [float(loss_of(s)) for s in valid]
+    val_tokens = [sum(v != -100 for v in s["labels"]) for s in valid]
     summary = {"completed": stopped is None, "stopped_by": stopped, "processed_microsteps": i + 1,
                "requested_microsteps": len(order), "updates": updates, "trained_supervised_tokens": trained_tokens,
                "training_seconds": time.time() - start,
                "first_20_loss": sum(losses[:20]) / max(1, len(losses[:20])),
                "last_20_loss": sum(losses[-20:]) / max(1, len(losses[-20:])),
-               "validation_loss": sum(val) / len(val), "validation_chats": len(val)}
+               "skipped_updates_nonfinite_grad": skipped_updates,
+               # validation_loss is the mean of per-chat mean NLL (the training objective's weighting);
+               # validation_token_nll weights every supervised token equally. Validation is only reported:
+               # nothing here selects a checkpoint or stops early on it.
+               "validation_loss": sum(val) / len(val),
+               "validation_token_nll": sum(a * n for a, n in zip(val, val_tokens)) / sum(val_tokens),
+               "validation_supervised_tokens": sum(val_tokens), "validation_chats": len(val)}
     (args.out / "training_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print("summary", json.dumps(summary), flush=True)
 

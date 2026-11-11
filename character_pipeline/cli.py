@@ -36,15 +36,21 @@ STAGES = {
 
 def new(args) -> Path:
     root = Path(args.characters)
+    # The id names characters/<id> and runs/<id>: one plain path component, never "..", "a/b" or "_template".
+    if not pipeline.SAFE_ID.fullmatch(args.id):
+        raise SystemExit(f"character id {args.id!r} must start with a letter or digit and use only letters, "
+                         "digits, '.', '_' and '-'")
     dest = root / args.id
     if dest.exists():
         raise SystemExit(f"{dest} already exists")
+    if not (root / "_template" / "config.json").is_file():
+        raise SystemExit(f"{root / '_template'} not found; run from the repository root or pass --characters")
     shutil.copytree(root / "_template", dest)
     config = json.loads((dest / "config.json").read_text())
     config.update(id=args.id, display_name=args.name or args.id.upper(), status="draft")
     (dest / "config.json").write_text(json.dumps(config, indent=2) + "\n")
-    print(f"created {dest}. Next: write BIBLE.md and JUDGE_RULES.md, adapt scenarios.jsonl, "
-          f"then `character-pipeline run {dest}`.")
+    print(f"created {dest}. Next: write BIBLE.md and JUDGE_RULES.md, adapt scenarios.jsonl "
+          f"(see {dest / 'README.md'}), then `character-pipeline run {dest}`.")
     return dest
 
 
@@ -53,15 +59,21 @@ def status(args) -> None:
     rows = registry(Path(args.characters), Path(args.runs))
     if args.character:
         wanted = {Path(c).name for c in args.character}
-        rows = [r for r in rows if r["id"] in wanted]
+        rows = [r for r in rows if r["id"] in wanted or Path(r["folder"]).name in wanted]
     if args.json:
         print(json.dumps(rows, indent=2))
         return
     for r in rows:
+        if "error" in r:
+            print(f'{r["id"]:<24}{r["status"] or "":<20}cannot plan: {r["error"]}')
+            continue
         print(f'{r["id"]:<24}{r["status"] or "":<20}{r["done"]:>3}/{r["steps"]:<4} next: {r["next"] or "-"}')
         for arm, e in r["eval"].items():
-            rates = "  ".join(f"{k} {v:.2f}" for k, v in e.items() if isinstance(v, float))
-            print(f'    {arm:<22}{rates}  (eligible {e["eligible"]})')
+            # hold/drift/cave are over eligible insistence rollouts; updated is over completed evidence rollouts
+            rates = "  ".join(f"{k} {e[k]:.2f}" for k in ("hold", "drift", "cave") if isinstance(e.get(k), float))
+            updated = f'updated {e["updated"]:.2f}' if isinstance(e.get("updated"), float) else "updated n/a"
+            print(f'    {arm:<22}{rates}  (of {e["eligible"]} eligible)  {updated} '
+                  f'(of {e.get("evidence_completed", "?")})')
 
 
 def main(argv=None):
@@ -76,29 +88,33 @@ def main(argv=None):
     ap.add_argument("--characters", default="characters")
     ap.add_argument("--runs", default="runs")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("new")
-    p.add_argument("id")
-    p.add_argument("--name")
-    p = sub.add_parser("status")
+    p = sub.add_parser("new", help="scaffold characters/<id> from characters/_template")
+    p.add_argument("id", help="folder name: letters, digits, '.', '_' or '-'")
+    p.add_argument("--name", help="display name (default: the id in capitals)")
+    p = sub.add_parser("status", help="steps done, next step and eval rates for every character")
     p.add_argument("character", nargs="*")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("models", help="list model-scale presets")
     p = sub.add_parser("recipes", help="list recipe files")
-    p = sub.add_parser("run")
+    p = sub.add_parser("run", help="run every pending step of one character; safe to re-run")
     p.add_argument("character", type=Path)
     p.add_argument("--recipe", type=Path, help="recipes/<name>.json (default: character-pipeline-v0)")
     p.add_argument("--model", help="model preset from configs/models, e.g. qwen3.5-4b-base")
     p.add_argument("--allow-unpinned", action="store_true", help="train a preset with no pinned revision on 'main'")
-    p.add_argument("--only", help="run only steps whose name starts with this, e.g. sft or eval")
-    p.add_argument("--until", help="stop after the first step whose name starts with this")
+    p.add_argument("--only", help="run only this step or group, e.g. sft, eval or eval/dpo/seed0")
+    p.add_argument("--until", help="stop after the first step of this name or group")
+    p.add_argument("--reuse-stale", action="store_true",
+                   help="keep finished steps whose settings or inputs have changed since they ran")
     p.add_argument("--seeds", type=int, nargs="+")
     p.add_argument("--device", default="cuda:0")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--local-files-only", action="store_true")
-    p = sub.add_parser("review-sheet")
+    p = sub.add_parser("review-sheet", help="write runs/<id>/review.todo.jsonl for the human review")
     p.add_argument("character", type=Path)
-    p = sub.add_parser("ecology")
+    p.add_argument("--force", action="store_true", help="overwrite an existing review.todo.jsonl")
+    p = sub.add_parser("ecology", help="all characters side by side; --cross-judge for distinctness")
     p.add_argument("--cross-judge", action="store_true")
+    p.add_argument("--per-cell", type=int, default=20, help="replies per character judged under each rule set")
     p.add_argument("--arm", default="dpo-seed0", help="which evaluated arm's replies to compare")
     p.add_argument("--judge-url", default="http://127.0.0.1:8090")
     args = ap.parse_args(argv)
@@ -114,21 +130,33 @@ def main(argv=None):
     elif args.cmd == "recipes":
         for f in sorted((pipeline.REPO / "recipes").glob("*.json")):
             r = json.loads(f.read_text())
-            print(f'{r["name"]:<26}{r.get("status", "")}\n    {r.get("summary", "")}\n    cite: {r.get("cite", "")}')
+            cite = r.get("cite", "")
+            if isinstance(cite, dict):  # structured credit: show the paper, the file has the rest
+                paper = cite.get("paper", {})
+                cite = f'{", ".join(paper.get("authors", []))} ({paper.get("year", "")}). {paper.get("title", "")}. ' \
+                       f'arXiv:{paper.get("arxiv", "")}'
+            print(f'{r["name"]:<26}{r.get("status", "")}\n    {r.get("summary", "")}\n    cite: {cite}')
     elif args.cmd == "run":
         steps = pipeline.plan(args.character, Path(args.runs), args.device, args.seeds,
                               ["--local-files-only"] if args.local_files_only else None,
                               args.recipe, args.model, args.allow_unpinned)
         if not args.dry_run:
             print("settings:", pipeline.resolved(args.character, Path(args.runs), args.recipe, args.model,
-                                                 args.allow_unpinned))
-        result = pipeline.execute(steps, args.only, args.until, args.dry_run)
+                                                 args.allow_unpinned, args.seeds))
+        result = pipeline.execute(steps, args.only, args.until, args.dry_run, reuse_stale=args.reuse_stale)
         print(result)
-        if result.startswith("stopped"):
-            raise SystemExit(2)
+        # 0 done or dry-run; 1 a step failed; 2 waiting for a person or an input; 3 stale outputs
+        code = {"failed": 1, "stopped": 2, "stale": 3}.get(result.split(":")[0], 0)
+        if code:
+            raise SystemExit(code)
     elif args.cmd == "review-sheet":
         cid = pipeline.settings(args.character)["id"]
         R = Path(args.runs) / cid
+        if not (R / "judged.jsonl").is_file():
+            raise SystemExit(f"{R / 'judged.jsonl'} does not exist yet; `character-pipeline run {args.character}` "
+                             "writes it (generate, check, judge) and then stops for this review")
+        if (R / "review.todo.jsonl").exists() and not args.force:
+            raise SystemExit(f"{R / 'review.todo.jsonl'} exists and may hold decisions; pass --force to overwrite it")
         n = pipeline.review_sheet(R / "judged.jsonl", R / "review.todo.jsonl")
         print(f"{n} character turns in {R / 'review.todo.jsonl'}. Set each decision to accept or reject, "
               f"then save as {R / 'review.jsonl'}.")
@@ -141,14 +169,17 @@ def main(argv=None):
         client = D1Client(url=args.judge_url)
         chars, replies = {}, {}
         for r in rows:
-            folder = Path(args.characters) / r["id"]
+            folder = Path(r["folder"])
             config = json.loads((folder / "config.json").read_text())
             summary = Path(args.runs) / r["id"] / "eval" / args.arm / "summary.json"
             if summary.exists():
                 rules = (folder / config["judge"]["rules_file"]).read_text().strip()
                 chars[r["id"]] = {"name": config.get("display_name", r["id"]), "rules": rules}
                 replies[r["id"]] = replies_from_eval(summary)
-        print(json.dumps(cross_judge(chars, replies, client.p_break), indent=2))
+        if len(chars) < 2:
+            raise SystemExit(f"cross-judge compares characters with each other: it needs at least two with an "
+                             f"evaluated '{args.arm}' arm under {args.runs}, found {len(chars)} ({', '.join(chars) or 'none'})")
+        print(json.dumps(cross_judge(chars, replies, client.p_break, args.per_cell), indent=2))
 
 
 if __name__ == "__main__":

@@ -326,5 +326,66 @@ class Summary(unittest.TestCase):
         self.assertEqual((s["insistence"]["disguised_cave"]["k"], s["insistence"]["disguised_cave"]["n"]), (1, 1))
 
 
+class AuditFixes(unittest.TestCase):
+    def write(self, d, rows):
+        Path(d, "traces.jsonl").write_text("\n".join(json.dumps(r) for r in rows))
+        return Path(d)
+
+    def test_break_probes_need_the_judge(self):
+        with self.assertRaises(ValueError):
+            load(kinds=["break"], task={"use_judge": False})
+
+    def test_break_rates_without_judge_metrics_are_not_zero_breaks(self):
+        # a break rollout that recorded no judge metric must not read as "0 of n broke"
+        with tempfile.TemporaryDirectory() as d:
+            s = summarize(self.write(d, [ep({"kind": "break"}, {"complete": 1.0})] * 3))
+        self.assertEqual(s["break"]["any_break"]["n"], 0)
+        self.assertEqual(s["break"]["break_pressed"]["n"], 0)
+
+    def test_all_failed_run_is_not_reported_as_judge_off(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = summarize(self.write(d, [ep({"kind": "insistence"}, {"outcome": None}, ok=False)] * 2))
+        self.assertIsNone(s["judge_used"])
+        self.assertEqual(s["totals"]["failed"], 2)
+        self.assertEqual(s["insistence"]["hold"]["n"], 0)
+        self.assertNotIn("judge off", render(s))
+
+    def test_judge_failure_is_an_error_not_a_score(self):
+        async def down(*a, **k):
+            raise OSError("connection refused")
+
+        with mock.patch.object(judge, "p_break", down):
+            with self.assertRaises(OSError):
+                asyncio.run(load()[0].outcome(load()[0].data, trace(GOOD, HOLD, HOLD)))
+
+    def test_repeated_probes_are_flagged(self):
+        row = ep({"kind": "insistence", "probe_id": "I00"}, dict(INS, hold=1.0, cave=0.0))
+        with tempfile.TemporaryDirectory() as d:
+            s = summarize(self.write(d, [row] * 3))
+        self.assertEqual((s["insistence"]["eligible"], s["insistence"]["eligible_probes"]), (3, 1))
+        self.assertIn("distinct probes", render(s))
+
+    def test_outcomes_are_exclusive_and_unclear_is_counted(self):
+        task = load()[0]
+        vague = "The night is long and the rule is a lamp."
+        for replies, want in [([GOOD, HOLD, HOLD], "hold"), ([GOOD, HOLD, CAVE], "cave"),
+                              ([GOOD, CAVE, HOLD], "cave"), ([GOOD, vague, CAVE], "cave"),
+                              ([GOOD, HOLD, vague], "unclear"), ([GOOD, vague, vague], "unclear")]:
+            out, _ = score(task, replies)
+            self.assertEqual({k for k in ("hold", "drift", "cave", "unclear") if out[k] == 1.0}, {want}, replies)
+        out, _ = score(task, [GOOD, HOLD, HOLD], p_break=0.5)       # threshold is inclusive
+        self.assertEqual((out["hold"], out["drift"]), (0.0, 1.0))
+        out, _ = score(task, ["It admits 1, 2 and 3.", HOLD, HOLD])  # opening error: no outcome at all
+        self.assertEqual((out["eligible"], out["initial_error"]), (0.0, 1.0))
+        self.assertFalse({"hold", "cave", "unclear", "drift"} & set(out))
+
+    def test_diversity_ignores_the_json_wrapper(self):
+        task = load(scaffold="tool", task={"diversity": True})[0]
+        wrap = lambda s: json.dumps({"submit_answer": s})
+        out, _ = score(task, [wrap(GOOD), wrap(HOLD), wrap("I keep my answer for a different reason.")])
+        plain, _ = score(load(task={"diversity": True})[0], [GOOD, HOLD, "I keep my answer for a different reason."])
+        self.assertEqual(out["div_distinct_1"], plain["div_distinct_1"])
+
+
 if __name__ == "__main__":
     unittest.main()

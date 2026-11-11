@@ -16,11 +16,14 @@ import argparse
 import hashlib
 import json
 import random
+import re
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
 from character_pipeline.character import load_character
+from character_pipeline.data.io import read_jsonl, resumable_jsonl
 from character_pipeline.generate.controller import hygiene, render
 
 STOP = ["<|im_end|>", "<|im_start|>", "<|endoftext|>"]
@@ -50,7 +53,6 @@ def finish_reason(response: dict) -> str:
 
 
 def mechanical(text: str, finish: str) -> list[str]:
-    import re
     flags = []
     if not text.strip():
         flags.append("empty")
@@ -61,11 +63,23 @@ def mechanical(text: str, finish: str) -> list[str]:
     return flags
 
 
-def complete(url: str, body: dict, timeout: float = 180.0) -> dict:
+def complete(url: str, body: dict, timeout: float = 180.0, retries: int = 2, backoff: float = 2.0) -> dict:
+    """POST one completion. Connection errors, timeouts and HTTP 5xx are retried with the
+    identical body (same seed); HTTP 4xx and a non-JSON body raise at once."""
     req = urllib.request.Request(url.rstrip("/") + "/completion", data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.load(r)
+    for attempt in range(retries + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                response = json.load(r)
+            if not isinstance(response, dict):
+                raise ValueError(f"teacher server returned {type(response).__name__}, expected a JSON object")
+            return response
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+            client_error = isinstance(e, urllib.error.HTTPError) and e.code < 500
+            if client_error or attempt == retries:
+                raise
+            time.sleep(backoff * (attempt + 1))
 
 
 def run_scenario(scenario: dict, system: str, url: str, seed: int, name: str,
@@ -78,7 +92,8 @@ def run_scenario(scenario: dict, system: str, url: str, seed: int, name: str,
         body = request_body(prompt, seed + i)
         started = time.monotonic()
         response = call(url, body)
-        text = response.get("content", "").strip()
+        content = response.get("content")
+        text = content.strip() if isinstance(content, str) else ""  # missing content is flagged "empty"
         finish = finish_reason(response)
         flags = mechanical(text, finish) + [f for f in hygiene(text, finish, name=name)
                                             if f not in ("empty", "incomplete")]
@@ -93,6 +108,12 @@ def run_scenario(scenario: dict, system: str, url: str, seed: int, name: str,
             "training_eligible": False}
 
 
+def scenario_seeds(scenarios: list[dict], seed: int) -> list[int]:
+    """One seed per scenario, drawn in file order, so a resumed run gets the seeds it would have had."""
+    rng = random.Random(seed)
+    return [rng.randrange(1 << 30) for _ in scenarios]
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("character", type=Path)
@@ -104,16 +125,24 @@ def main(argv=None):
     args = ap.parse_args(argv)
     character = load_character(args.character)
     system = character.system_prompt()
-    scenarios = [json.loads(x) for x in args.scenarios.read_text().splitlines() if x.strip()]
-    if args.limit:
+    scenarios = read_jsonl(args.scenarios)
+    if args.limit is not None:
         scenarios = scenarios[: args.limit]
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    rng = random.Random(args.seed)
-    with args.out.open("x") as f:  # never overwrite raw generations
-        for scenario in scenarios:
-            row = run_scenario(scenario, system, args.url, rng.randrange(1 << 30), character.name)
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
-            f.flush()
+    ids = [s["id"] for s in scenarios]
+    if len(set(ids)) != len(ids):
+        raise SystemExit(f"{args.scenarios}: duplicate scenario ids")
+    seeds = scenario_seeds(scenarios, args.seed)
+    system_sha = hashlib.sha256(system.encode()).hexdigest()
+    # Raw generations are never overwritten. Rows go to <out>.partial and the file is renamed
+    # when every scenario is done, so an interrupted run is resumed, not mistaken for a full one.
+    with resumable_jsonl(args.out) as (done, write):
+        expected = [(i, s, system_sha) for i, s in zip(ids, seeds)][: len(done)]
+        if len(done) > len(ids) or [(r["scenario_id"], r["seed"], r["system_sha256"]) for r in done] != expected:
+            raise SystemExit(f"{args.out}.partial was written with other scenarios, seed or system prompt; "
+                             "delete it to start again")
+        for scenario, seed in list(zip(scenarios, seeds))[len(done):]:
+            row = run_scenario(scenario, system, args.url, seed, character.name)
+            write(row)
             print(scenario["id"], [t["flags"] for t in row["history"] if t["speaker"] != "partner"], flush=True)
 
 

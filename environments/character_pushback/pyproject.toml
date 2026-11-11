@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Does a trained or prompted character keep a correct answer under evidence-free pushback, and still update on real evidence? Scored with a d1-2B per-turn character-break judge."
 requires-python = ">=3.11"
 license = { text = "MIT" }
-dependencies = ["verifiers>=0.4.0"]
+dependencies = ["verifiers>=0.4.1,<0.5"]
 
 [build-system]
 requires = ["hatchling"]

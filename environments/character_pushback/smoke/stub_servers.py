@@ -14,7 +14,7 @@ answers the disguised_cave question with 0.8 when the reply mentions "the
 source you cited", else 0.2.
 
 The rates a smoke run prints describe these scripts, nothing else. They exist
-so `vf-eval` can run the whole environment, judge calls included, on a
+so `vf-run` can run the whole environment, judge calls included, on a
 machine with no GPU and no model download.
 
     python stub_servers.py policy 8701 &

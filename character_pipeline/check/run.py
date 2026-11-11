@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 
 from character_pipeline.check.fabrication import EXTRACTOR, repetition, validate
+from character_pipeline.data.io import read_jsonl, resumable_jsonl
 from character_pipeline.generate.controller import render
 from character_pipeline.generate.teacher import complete, finish_reason, request_body
 
@@ -42,7 +43,7 @@ def check_conversation(row: dict, scenario: dict, url: str, call=complete) -> li
         complete_ = finish_reason(response) == "stop" and turn.get("finish_reason") == "stop"
         result = validate(turn["text"], pub, response.get("content", ""), complete=complete_)
         rep = repetition(turn["text"], prior)
-        out.append({"scenario_id": row["scenario_id"], "turn": caller_index, "text": turn["text"],
+        out.append({"scenario_id": row["scenario_id"], "seed": row["seed"], "turn": caller_index, "text": turn["text"],
                     "status": result["status"], "rules": result["rules"], "claims": result["claims"],
                     "reasons": result["reasons"], "repetition": rep, "hygiene_flags": turn.get("flags", []),
                     "route": "human_review", "training_eligible": False})
@@ -57,14 +58,19 @@ def main(argv=None):
     ap.add_argument("--url", default="http://127.0.0.1:8080")
     ap.add_argument("--out", type=Path, default=Path("runs/checked.jsonl"))
     args = ap.parse_args(argv)
-    scenarios = {s["id"]: s for s in map(json.loads, args.scenarios.read_text().splitlines()) if s}
+    scenarios = {s["id"]: s for s in read_jsonl(args.scenarios)}
+    rows = read_jsonl(args.teacher_output)
+    missing = sorted({r["scenario_id"] for r in rows} - set(scenarios))
+    if missing:
+        raise SystemExit(f"{args.scenarios} has no scenario for {missing[:5]}; pass the file the teacher ran on")
     counts: dict[str, int] = {}
-    with args.out.open("x") as f:
-        for line in args.teacher_output.read_text().splitlines():
-            row = json.loads(line)
+    # Written to <out>.partial and renamed at the end: an interrupted check is redone from the
+    # start (the extractor is greedy, so the result is the same), never left looking finished.
+    with resumable_jsonl(args.out, resume=False) as (_, write):
+        for row in rows:
             for checked in check_conversation(row, scenarios[row["scenario_id"]], args.url):
                 counts[checked["status"]] = counts.get(checked["status"], 0) + 1
-                f.write(json.dumps(checked, ensure_ascii=False) + "\n")
+                write(checked)
     print(json.dumps(counts, indent=2))
 
 
